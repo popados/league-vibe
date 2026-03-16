@@ -1,0 +1,134 @@
+/* Base styles for League Vibe match history + champion stats tracker */
+
+* {
+    margin: 0;
+    padding: 0;
+    list-style-type: none;
+    box-sizing: border-box;
+}
+
+body {
+    color: white;
+    width: 100%;
+    height: 100vh;
+    background-color: rgb(67, 67, 67);
+    font-family: sans-serif;
+    font-size: 16px;
+}
+
+:root {
+    --main-color: #d8d2e1;
+    --secondary-color: #34435e;
+    --nav-bg-color: #1c1d21;
+    --link-color: #f0b729;
+    --last-color: #a4d2d1;
+}
+
+
+a {
+    color: orange;
+    text-decoration: none;
+}
+
+
+.app-container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+.app-navigation {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.app-navigation button {
+    padding: 8px 16px;
+    background: var(--nav-bg-color);
+    border: 1px solid var(--link-color);
+    color: var(--main-color);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.app-navigation button:hover {
+    background: var(--secondary-color);
+    color: var(--last-color);
+}
+
+.summoner-search input,
+.summoner-search select,
+.summoner-search button {
+    padding: 8px;
+    background: var(--nav-bg-color);
+    border: 1px solid var(--link-color);
+    color: var(--main-color);
+    border-radius: 4px;
+}
+
+.summoner-search button:hover {
+    background: var(--secondary-color);
+    color: var(--last-color);
+}
+
+.match-history,
+.champion-stats,
+.champions-view,
+.items-view,
+.match-detail-view,
+.summoner-profile-view {
+    margin-top: 24px;
+}
+
+.match-list,
+.champion-stats-list,
+.champions-list,
+.items-list,
+.participants-list,
+.match-history-list {
+    list-style: none;
+    padding: 0;
+}
+
+.match-item,
+.champion-stats-item,
+.champion-item,
+.item-item,
+.participant-item,
+.match-history-item {
+    padding: 10px;
+    background: var(--secondary-color);
+    border: 1px solid var(--link-color);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    color: var(--main-color);
+}
+
+.champion-item,
+.item-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.champion-image,
+.item-image,
+.profile-icon,
+.item-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 4px;
+}
+
+.participant-items {
+    display: flex;
+    gap: 5px;
+    margin-top: 5px;
+}
+
+.participant-items img {
+    width: 30px;
+    height: 30px;
+}

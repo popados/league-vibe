@@ -1,0 +1,19 @@
+{
+  "name": "league-vibe",
+  "version": "1.0.0",
+  "description": "League of Legends match history and champion stats tracker",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node test-api.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "node-fetch": "^2.7.0"
+  },
+  "keywords": ["league-of-legends", "riot-api", "champions"],
+  "author": "",
+  "license": "MIT"
+}

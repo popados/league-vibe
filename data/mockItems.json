@@ -1,0 +1,23 @@
+[
+  {
+    "id": 1001,
+    "name": "Boots of Speed",
+    "description": "Slightly increases Movement Speed",
+    "image": "https://ddragon.leagueoflegends.com/cdn/13.6.1/img/item/1001.png",
+    "gold": { "base": 300, "total": 300, "sell": 210 }
+  },
+  {
+    "id": 1055,
+    "name": "Doran's Blade",
+    "description": "Good starting item for AD carries",
+    "image": "https://ddragon.leagueoflegends.com/cdn/13.6.1/img/item/1055.png",
+    "gold": { "base": 450, "total": 450, "sell": 315 }
+  },
+  {
+    "id": 3070,
+    "name": "Tear of the Goddess",
+    "description": "Increases maximum Mana as you cast spells",
+    "image": "https://ddragon.leagueoflegends.com/cdn/13.6.1/img/item/3070.png",
+    "gold": { "base": 400, "total": 400, "sell": 280 }
+  }
+]

@@ -1,0 +1,22 @@
+[
+  {
+    "matchId": "NA1_1234567890",
+    "date": "2026-03-14T22:18:00Z",
+    "championName": "Ahri",
+    "kda": "10/3/7",
+    "win": true,
+    "kills": 10,
+    "deaths": 3,
+    "assists": 7
+  },
+  {
+    "matchId": "NA1_0987654321",
+    "date": "2026-03-13T20:05:00Z",
+    "championName": "Lucian",
+    "kda": "6/5/9",
+    "win": false,
+    "kills": 6,
+    "deaths": 5,
+    "assists": 9
+  }
+]

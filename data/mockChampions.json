@@ -1,0 +1,41 @@
+[
+  {
+    "id": 1,
+    "name": "Ahri",
+    "title": "the Nine-Tailed Fox",
+    "tags": ["Mage", "Assassin"],
+    "stats": {
+      "hp": 526,
+      "mp": 418,
+      "armor": 21,
+      "mr": 30
+    },
+    "image": "https://ddragon.leagueoflegends.com/cdn/13.6.1/img/champion/Ahri.png"
+  },
+  {
+    "id": 2,
+    "name": "Akali",
+    "title": "the Rogue Assassin",
+    "tags": ["Assassin"],
+    "stats": {
+      "hp": 570,
+      "mp": 200,
+      "armor": 23,
+      "mr": 37
+    },
+    "image": "https://ddragon.leagueoflegends.com/cdn/13.6.1/img/champion/Akali.png"
+  },
+  {
+    "id": 3,
+    "name": "Jinx",
+    "title": "the Loose Cannon",
+    "tags": ["Marksman"],
+    "stats": {
+      "hp": 610,
+      "mp": 245,
+      "armor": 26,
+      "mr": 30
+    },
+    "image": "https://ddragon.leagueoflegends.com/cdn/13.6.1/img/champion/Jinx.png"
+  }
+]
