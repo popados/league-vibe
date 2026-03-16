@@ -5,38 +5,111 @@ export function createChampionsView(champions = []) {
   container.className = "champions-view";
 
   const title = document.createElement("h2");
+  title.className = "page-title";
   title.textContent = "Champions";
   container.appendChild(title);
 
-  const list = document.createElement("div");
-  list.className = "champions-list";
+  const grid = document.createElement("div");
+  grid.id = "champion-cards";
 
-  champions.forEach((champion) => {
-    const item = document.createElement("div");
-    item.className = "champion-item";
+  champions.forEach((champion, index) => {
+    // Construct splash art URL (Data Dragon format)
+    const splashUrl = `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${champion.id}_0.jpg`;
 
-    const img = document.createElement("img");
-    img.src = champion.image;
-    img.alt = champion.name;
-    img.className = "champion-image";
+    const card = document.createElement("div");
+    card.className = "champion-card";
+    card.style.animationDelay = `${index * 0.05}s`;
+
+    const splash = document.createElement("img");
+    splash.src = splashUrl;
+    splash.alt = `${champion.name} Splash Art`;
+    splash.className = "splash";
 
     const info = document.createElement("div");
-    info.className = "champion-info";
+    info.className = "info";
 
-    const name = document.createElement("h3");
-    name.textContent = `${champion.name} - ${champion.title}`;
+    const sicon = document.createElement("img");
+    sicon.src = champion.image;
+    sicon.alt = `${champion.name} Icon`;
+    sicon.className = "sicon";
 
-    const tags = document.createElement("p");
-    tags.textContent = `Tags: ${champion.tags.join(", ")}`;
+    const details = document.createElement("div");
+    details.className = "details";
 
-    const stats = document.createElement("p");
-    stats.textContent = `HP: ${champion.stats.hp}, MP: ${champion.stats.mp}, Armor: ${champion.stats.armor}, MR: ${champion.stats.mr}`;
+    const name = document.createElement("strong");
+    name.textContent = champion.name;
 
-    info.append(name, tags, stats);
-    item.append(img, info);
-    list.appendChild(item);
+    const subtitle = document.createElement("small");
+    subtitle.textContent = champion.title;
+
+    details.appendChild(name);
+    details.appendChild(subtitle);
+
+    info.appendChild(sicon);
+    info.appendChild(details);
+
+    // Hover info overlay
+    const hoverInfo = document.createElement("div");
+    hoverInfo.className = "hover-info";
+    hoverInfo.id = `info-${champion.id}`;
+
+    const header = document.createElement("div");
+    header.className = "champion-header";
+
+    const hoverName = document.createElement("strong");
+    hoverName.textContent = champion.name;
+
+    const hoverTitle = document.createElement("small");
+    hoverTitle.textContent = champion.title;
+
+    header.appendChild(hoverName);
+    header.appendChild(hoverTitle);
+
+    const blurb = document.createElement("div");
+    blurb.className = "blurb";
+    blurb.textContent = champion.blurb || "Loading champion details...";
+
+    const statsGrid = document.createElement("div");
+    statsGrid.className = "stats-grid";
+
+    // Add some key stats
+    const stats = [
+      { label: "❤️ HP", value: Math.round(champion.stats.hp) },
+      { label: "⚔️ Attack", value: Math.round(champion.stats.attackdamage) },
+      { label: "🛡️ Armor", value: Math.round(champion.stats.armor) },
+      { label: "🔮 Magic Resist", value: Math.round(champion.stats.spellblock) },
+      { label: "⚡ Attack Speed", value: champion.stats.attackspeed.toFixed(2) },
+      { label: "💨 Move Speed", value: Math.round(champion.stats.movespeed) }
+    ];
+
+    stats.forEach(stat => {
+      const statItem = document.createElement("div");
+      statItem.className = "stat-item";
+
+      const label = document.createElement("span");
+      label.className = "stat-label";
+      label.textContent = stat.label;
+
+      const value = document.createElement("span");
+      value.className = "stat-value";
+      value.textContent = stat.value;
+
+      statItem.appendChild(label);
+      statItem.appendChild(value);
+      statsGrid.appendChild(statItem);
+    });
+
+    hoverInfo.appendChild(header);
+    hoverInfo.appendChild(blurb);
+    hoverInfo.appendChild(statsGrid);
+
+    card.appendChild(splash);
+    card.appendChild(info);
+    card.appendChild(hoverInfo);
+
+    grid.appendChild(card);
   });
 
-  container.appendChild(list);
+  container.appendChild(grid);
   return container;
 }

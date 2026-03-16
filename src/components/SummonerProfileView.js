@@ -29,12 +29,12 @@ export function createSummonerProfileView(summoner) {
   const historyList = document.createElement("ul");
   historyList.className = "match-history-list";
 
-  summoner.matchHistory.forEach((match) => {
-    const li = document.createElement("li");
-    li.className = "match-history-item";
-    li.textContent = `${match.date} - ${match.championName} - ${match.kda} - ${match.win ? 'Win' : 'Loss'}`;
-    historyList.appendChild(li);
-  });
+//   summoner.matchHistory.forEach((match) => {
+//     const li = document.createElement("li");
+//     li.className = "match-history-item";
+//     li.textContent = `${match.date} - ${match.championName} - ${match.kda} - ${match.win ? 'Win' : 'Loss'}`;
+//     historyList.appendChild(li);
+//   });
 
   container.appendChild(historyList);
 
