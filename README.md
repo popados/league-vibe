@@ -1,4 +1,5 @@
-
+<!-- markdownlint-disable MD031 -->
+<!-- markdownlint-disable MD32 -->
 <!-- markdownlint-disable MD033 -->
 <!-- markdownlint-disable MD036 -->
 <!-- markdownlint-disable MD041 -->
@@ -117,6 +118,24 @@ league-vibe/
 - `GET /api/items` - Get all items data
 - `GET /api/summoner/:region/:gameName/:tag` - Get summoner info
 - `GET /api/summoner/:region/:gameName/:tag/matches` - Get match history
+- `POST /api/summoner/:region/:gameName/:tag/matches/save` - Save hosted match history JSON to MongoDB
+- `GET /api/summoner/:gameName/:tag/matches/:matchId` - Get match details
+- `POST /api/summoner/:gameName/:tag/matches/:matchId/save` - Save match details JSON to MongoDB
+
+### MongoDB Save Route
+
+Set `MONGODB_URI` in your environment before calling the save route. Optional settings: `MONGODB_DB_NAME` and `MONGODB_MATCH_HISTORY_COLLECTION`.
+
+Example request:
+
+```json
+POST /api/summoner/na/Doublelift/NA1/matches/save
+{
+   "count": 10
+}
+```
+
+The server fetches the same match-history JSON exposed by the GET endpoint and upserts it into MongoDB using the summoner region and PUUID.
 
 ***
 
@@ -138,6 +157,26 @@ league-vibe/
 - ✅ Created .env file template
 - ✅ Updated README with setup instructions
 - ✅ Added API key configuration guide
+
+***
+
+### 002 | 3/16/2026 - Environment Setup Complete
+
+Finished:
+- Added styling
+- Match History
+- Champs
+- Items
+- Details(win/loss, KDA, items)
+- Summoner Profile
+- Search Summoner
+
+TODO:
+- Database Ingress
+- API Validation
+- Schema
+- Models
+- API POST GET DELETE
 
 ***
 

@@ -864,6 +864,55 @@ a {
     border: 1px solid rgba(240, 177, 41, 0.1);
 }
 
+.match-history-actions {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.save-history-button {
+    min-width: 220px;
+    padding: 12px 18px;
+    background: linear-gradient(135deg, var(--link-color), #c99012);
+    color: var(--nav-bg-color);
+    border: none;
+    border-radius: 999px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.save-history-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(240, 177, 41, 0.25);
+}
+
+.save-history-button:disabled {
+    cursor: wait;
+    opacity: 0.7;
+}
+
+.save-history-status {
+    min-height: 20px;
+    font-size: 0.9em;
+    color: var(--last-color);
+}
+
+.save-history-status.success {
+    color: #7bd88f;
+}
+
+.save-history-status.error {
+    color: #ff7b72;
+}
+
+.save-history-status.pending {
+    color: var(--link-color);
+}
+
 /* Responsive Match History */
 @media (max-width: 768px) {
     .match-history {
@@ -897,6 +946,10 @@ a {
     .kda {
         flex: 0 0 auto;
         font-size: 0.9em;
+    }
+
+    .save-history-button {
+        width: 100%;
     }
 }
 
@@ -933,6 +986,10 @@ a {
     .kda, .result {
         align-self: flex-end;
     }
+
+    .match-history-actions {
+        align-items: stretch;
+    }
 }
 
 /* Match Detail View Styles */
@@ -955,6 +1012,15 @@ a {
     font-size: 1.8em;
 }
 
+.match-detail-summoner {
+    text-align: center;
+    margin-top: -8px;
+    margin-bottom: 18px;
+    color: var(--last-color);
+    font-size: 0.98em;
+    font-weight: 600;
+}
+
 .loading {
     text-align: center;
     padding: 40px;
@@ -963,6 +1029,89 @@ a {
     background: rgba(0, 0, 0, 0.2);
     border-radius: 10px;
     border: 1px solid rgba(240, 177, 41, 0.1);
+}
+
+.match-selector-container {
+    margin-bottom: 18px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(240, 177, 41, 0.2);
+    border-radius: 10px;
+    display: grid;
+    gap: 8px;
+}
+
+.match-selector-label {
+    color: var(--last-color);
+    font-size: 0.9em;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.match-selector {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(240, 177, 41, 0.45);
+    border-radius: 8px;
+    color: var(--main-color);
+    padding: 10px 12px;
+    font-size: 0.95em;
+}
+
+.match-selector:focus {
+    outline: none;
+    border-color: var(--link-color);
+    box-shadow: 0 0 0 2px rgba(240, 177, 41, 0.2);
+}
+
+.match-detail-actions {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.save-detail-button {
+    min-width: 240px;
+    padding: 12px 18px;
+    border: none;
+    border-radius: 999px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    color: var(--nav-bg-color);
+    background: linear-gradient(135deg, var(--link-color), #c99012);
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.save-detail-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(240, 177, 41, 0.25);
+}
+
+.save-detail-button:disabled {
+    cursor: wait;
+    opacity: 0.7;
+}
+
+.save-detail-status {
+    min-height: 20px;
+    font-size: 0.9em;
+    color: var(--last-color);
+}
+
+.save-detail-status.success {
+    color: #7bd88f;
+}
+
+.save-detail-status.error {
+    color: #ff7b72;
+}
+
+.save-detail-status.pending {
+    color: var(--link-color);
 }
 
 .match-info {
@@ -1100,6 +1249,14 @@ a {
         padding: 12px;
     }
 
+    .match-selector {
+        font-size: 0.9em;
+    }
+
+    .save-detail-button {
+        width: 100%;
+    }
+
     .team-section {
         padding: 15px;
     }
@@ -1167,5 +1324,209 @@ a {
     .item-icon {
         width: 24px;
         height: 24px;
+    }
+}
+
+/* Summoner Profile View Styles */
+.summoner-profile-view {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    margin-top: 20px;
+}
+
+.summoner-profile-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 25px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 12px;
+    border: 1px solid rgba(240, 177, 41, 0.2);
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+}
+
+.summoner-profile-icon {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 3px solid var(--link-color);
+    box-shadow: 0 0 20px rgba(240, 177, 41, 0.3);
+}
+
+.summoner-profile-info {
+    flex: 1;
+    min-width: 250px;
+}
+
+.summoner-profile-name {
+    font-size: 2.2em;
+    font-weight: bold;
+    color: var(--main-color);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.summoner-profile-tag {
+    background: rgba(240, 177, 41, 0.2);
+    color: var(--link-color);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.9em;
+    font-weight: 500;
+    border: 1px solid rgba(240, 177, 41, 0.3);
+}
+
+.summoner-profile-level {
+    font-size: 1.4em;
+    color: var(--last-color);
+    margin-bottom: 15px;
+    font-weight: 500;
+}
+
+.summoner-profile-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.stat-item {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 12px 15px;
+    border-radius: 8px;
+    border: 1px solid rgba(240, 177, 41, 0.1);
+    text-align: center;
+}
+
+.stat-label {
+    font-size: 0.9em;
+    color: var(--last-color);
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-value {
+    font-size: 1.3em;
+    font-weight: bold;
+    color: var(--main-color);
+}
+
+.summoner-profile-loading {
+    text-align: center;
+    padding: 50px;
+    color: var(--last-color);
+    font-size: 1.2em;
+}
+
+.summoner-profile-error {
+    background: rgba(244, 67, 54, 0.1);
+    border: 1px solid rgba(244, 67, 54, 0.3);
+    color: #f44336;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+    margin: 20px 0;
+}
+
+.summoner-profile-match-history {
+    margin-top: 30px;
+}
+
+.summoner-profile-match-history h3 {
+    font-size: 1.8em;
+    color: var(--main-color);
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--link-color);
+    padding-bottom: 10px;
+}
+
+/* Responsive Summoner Profile View */
+@media (max-width: 768px) {
+    .summoner-profile-view {
+        padding: 15px;
+        margin-top: 20px;
+    }
+
+    .summoner-profile-header {
+        padding: 20px;
+        flex-direction: column;
+        text-align: center;
+        gap: 15px;
+    }
+
+    .summoner-profile-icon {
+        width: 80px;
+        height: 80px;
+    }
+
+    .summoner-profile-name {
+        font-size: 1.8em;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .summoner-profile-tag {
+        align-self: center;
+    }
+
+    .summoner-profile-level {
+        font-size: 1.2em;
+    }
+
+    .summoner-profile-stats {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    .stat-item {
+        padding: 10px 12px;
+    }
+
+    .stat-value {
+        font-size: 1.1em;
+    }
+}
+
+@media (max-width: 480px) {
+    .summoner-profile-view {
+        padding: 10px;
+    }
+
+    .summoner-profile-header {
+        padding: 15px;
+    }
+
+    .summoner-profile-icon {
+        width: 70px;
+        height: 70px;
+    }
+
+    .summoner-profile-name {
+        font-size: 1.5em;
+    }
+
+    .summoner-profile-level {
+        font-size: 1.1em;
+    }
+
+    .summoner-profile-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .stat-item {
+        padding: 8px 10px;
+    }
+
+    .stat-label {
+        font-size: 0.8em;
+    }
+
+    .stat-value {
+        font-size: 1em;
     }
 }

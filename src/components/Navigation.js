@@ -6,10 +6,11 @@ export function createNavigation(onNavigate) {
 
   const pages = [
     { id: "home", label: "Home" },
-    { id: "champions", label: "Champions" },
-    { id: "items", label: "Items" },
+    { id: "match-history", label: "Match History" },
     { id: "match-detail", label: "Match Detail" },
     { id: "summoner-profile", label: "Summoner Profile" },
+    { id: "champions", label: "Champions" },
+    { id: "items", label: "Items" },
   ];
 
   pages.forEach((page) => {

@@ -1,6 +1,11 @@
 // UI component for displaying match history
 
-export function createMatchHistoryView(matches = [], summoner = null, onNavigateToMatchDetail = null) {
+export function createMatchHistoryView(
+  matches = [],
+  summoner = null,
+  onNavigateToMatchDetail = null,
+  onSaveMatchHistory = null
+) {
   const container = document.createElement("div");
   container.className = "match-history";
 
@@ -66,5 +71,39 @@ export function createMatchHistoryView(matches = [], summoner = null, onNavigate
   });
 
   container.appendChild(list);
+
+  if (summoner && typeof onSaveMatchHistory === "function") {
+    const actions = document.createElement("div");
+    actions.className = "match-history-actions";
+
+    const status = document.createElement("p");
+    status.className = "save-history-status";
+
+    const saveButton = document.createElement("button");
+    saveButton.type = "button";
+    saveButton.className = "save-history-button";
+    saveButton.textContent = "Save Match History";
+
+    saveButton.addEventListener("click", async () => {
+      saveButton.disabled = true;
+      status.textContent = "Saving match history...";
+      status.className = "save-history-status pending";
+
+      try {
+        const result = await onSaveMatchHistory({ summoner, matches });
+        status.textContent = result?.message || "Match history saved.";
+        status.className = "save-history-status success";
+      } catch (error) {
+        status.textContent = error.message || "Failed to save match history.";
+        status.className = "save-history-status error";
+      } finally {
+        saveButton.disabled = false;
+      }
+    });
+
+    actions.append(saveButton, status);
+    container.appendChild(actions);
+  }
+
   return container;
 }

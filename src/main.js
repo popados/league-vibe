@@ -13,12 +13,64 @@ const app = document.getElementById("app");
 
 let currentPage = "home";
 let currentSummoner = null; // Cache for the currently searched summoner
+let currentMatchHistory = []; // Cache for the current match history
+
+function mapRegionToRouting(region = "NA") {
+  const normalized = region.toLowerCase();
+  const routingMap = {
+    na: "americas",
+    br: "americas",
+    lan: "americas",
+    las: "americas",
+    oce: "americas",
+    euw: "europe",
+    eune: "europe",
+    tr: "europe",
+    ru: "europe",
+    kr: "asia",
+    jp: "asia"
+  };
+
+  return routingMap[normalized] || "americas";
+}
+
+async function saveMatchHistory({ summoner, matches }) {
+  if (!summoner?.gameName || !summoner?.tagLine || !summoner?.region) {
+    throw new Error("Summoner information is required before saving.");
+  }
+
+  const region = summoner.region.toLowerCase();
+  const response = await fetch(
+    `http://localhost:3001/api/summoner/${encodeURIComponent(region)}/${encodeURIComponent(summoner.gameName)}/${encodeURIComponent(summoner.tagLine)}/matches/save`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        count: matches.length,
+        matchHistory: {
+          summoner,
+          matches
+        }
+      })
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.details || data.error || `Save failed: ${response.status}`);
+  }
+
+  return data;
+}
 
 function renderApp(data = {}) {
   app.innerHTML = "";
 
-  // Always include the current summoner in the data
-  const fullData = { ...data, summoner: currentSummoner };
+  // Always include the current summoner and match history in the data
+  const fullData = { ...data, summoner: currentSummoner, matchHistory: currentMatchHistory };
 
   const nav = createNavigation((page) => {
     currentPage = page;
@@ -30,6 +82,9 @@ function renderApp(data = {}) {
   switch (currentPage) {
     case "home":
       renderHome(fullData);
+      break;
+    case "match-history":
+      renderMatchHistory(fullData);
       break;
     case "champions":
       renderChampions(fullData);
@@ -65,8 +120,9 @@ function renderHome({ matchHistory = [], championStats = {} } = {}) {
 
       const data = await response.json();
 
-      // Cache the searched summoner
+      // Cache the searched summoner and match history
       currentSummoner = data.summoner;
+      currentMatchHistory = data.matches || [];
 
       // Update the app with the new match history data
       renderApp({
@@ -81,16 +137,37 @@ function renderHome({ matchHistory = [], championStats = {} } = {}) {
     }
   });
 
-  const matchHistoryView = createMatchHistoryView(matchHistory, currentSummoner, (match) => {
-    currentPage = "match-detail";
-    renderApp({
-      matchId: match.matchId
-    });
-  });
+  const matchHistoryView = createMatchHistoryView(
+    matchHistory,
+    currentSummoner,
+    (match) => {
+      currentPage = "match-detail";
+      renderApp({
+        matchId: match.matchId
+      });
+    },
+    saveMatchHistory
+  );
   const championStatsView = createChampionStatsView(championStats);
 
   app.append(search, matchHistoryView, championStatsView);
 }
+
+function renderMatchHistory({ matchHistory = [], summoner } = {}) {
+  const matchHistoryView = createMatchHistoryView(
+    matchHistory,
+    summoner,
+    (match) => {
+      currentPage = "match-detail";
+      renderApp({
+        matchId: match.matchId
+      });
+    },
+    saveMatchHistory
+  );
+  app.appendChild(matchHistoryView);
+}
+
 
 function renderChampions({ champions = [] } = {}) {
   // If champions data is not provided, fetch from server
@@ -173,14 +250,33 @@ async function fetchItemsFromServer() {
 }
 
 async function renderMatchDetail({ matchId, summoner } = {}) {
+  if (!currentSummoner?.gameName || !currentSummoner?.tagLine) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'loading';
+    errorDiv.textContent = 'No summoner selected. Search for a summoner to view match details.';
+    app.appendChild(errorDiv);
+    return;
+  }
+
   const gameName = currentSummoner.gameName;
   const tag = currentSummoner.tagLine;
-  const matchDetailView = await createMatchDetailView(gameName, tag, matchId);
+  const routingRegion = mapRegionToRouting(currentSummoner.region);
+  const matchDetailView = await createMatchDetailView(
+    gameName,
+    tag,
+    matchId,
+    currentMatchHistory,
+    (selectedMatchId) => {
+      currentPage = "match-detail";
+      renderApp({ matchId: selectedMatchId });
+    },
+    routingRegion
+  );
   app.appendChild(matchDetailView);
 }
 
-function renderSummonerProfile(summoner) {
-  const summonerProfileView = createSummonerProfileView(summoner);
+async function renderSummonerProfile(summoner) {
+  const summonerProfileView = await createSummonerProfileView(summoner);
   app.appendChild(summonerProfileView);
 }
 
