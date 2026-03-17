@@ -1,5 +1,5 @@
 <!-- markdownlint-disable MD031 -->
-<!-- markdownlint-disable MD32 -->
+<!-- markdownlint-disable MD032 -->
 <!-- markdownlint-disable MD033 -->
 <!-- markdownlint-disable MD036 -->
 <!-- markdownlint-disable MD041 -->
@@ -10,6 +10,7 @@
 [My Github](https://github.com/popados) | [Jump to End](#end-of-doc)
 
 ***
+
 ## League of Legends Match History & Champion Stats Tracker
 
 A modern web application that provides League of Legends match history, champion statistics, and item data using the official Riot Games API.
@@ -19,6 +20,7 @@ A modern web application that provides League of Legends match history, champion
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Node.js (v14 or higher)
 - npm or yarn
 - A free Riot Games API key
@@ -26,17 +28,20 @@ A modern web application that provides League of Legends match history, champion
 ### Installation
 
 1. **Clone the repository**
+
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/popados/league-vibe
    cd league-vibe
    ```
 
 2. **Install dependencies**
+
    ```bash
    npm install
    ```
 
 3. **Set up your Riot API Key**
+
    ```bash
    # Get your free API key from Riot Developer Portal
    # https://developer.riotgames.com/
@@ -49,26 +54,28 @@ A modern web application that provides League of Legends match history, champion
    ```
 
 4. **Start the development server**
+
    ```bash
    npm start
    ```
 
 5. **Open your browser**
-   ```
-   http://localhost:3000
-   ```
+
+   `http://localhost:3001`
 
 ***
 
 ## 🔑 Riot API Key Setup
 
 ### Step 1: Get Your API Key
+
 1. Visit [Riot Developer Portal](https://developer.riotgames.com/)
 2. Sign in with your Riot account
 3. Create a new project/application
 4. Copy your API key
 
 ### Step 2: Configure Environment
+
 1. Copy the `.env` file:
    ```bash
    cp .env.example .env
@@ -80,6 +87,7 @@ A modern web application that provides League of Legends match history, champion
    ```
 
 ### Step 3: Verify Setup
+
 Run the test script to verify your API key works:
 ```bash
 npm test
@@ -97,7 +105,7 @@ npm test
 
 ## 🏗️ Project Structure
 
-```
+``` fs
 league-vibe/
 ├── server.js          # Express server with Riot API integration
 ├── src/
@@ -151,7 +159,7 @@ The server fetches the same match-history JSON exposed by the GET endpoint and u
 
 ## 📝 Development Notes
 
-### DayNum | 3/16/2026 - Environment Setup Complete
+### 001 | 3/16/2026 | Monday - Environment Setup Complete
 
 - ✅ Added dotenv support for environment variables
 - ✅ Created .env file template
@@ -160,7 +168,7 @@ The server fetches the same match-history JSON exposed by the GET endpoint and u
 
 ***
 
-### 002 | 3/16/2026 - Environment Setup Complete
+### 002 | 3/16/2026 | Monday - Environment Setup Complete
 
 Finished:
 - Added styling
@@ -172,11 +180,23 @@ Finished:
 - Search Summoner
 
 TODO:
-- Database Ingress
-- API Validation
+- Database Ingress [x]
+- API Validation [x]
+- Schema [x]
+- Models [x]
+- API POST GET DELETE [x]
+
+***
+
+### 003 | 3/17/2026 - Tuesday | Environment Setup Complete
+
+Checklist:
+- Database connected
+- API POST GET methods
 - Schema
-- Models
-- API POST GET DELETE
+- Validation
+- Count selection for match history
+- Check database for the same record
 
 ***
 
