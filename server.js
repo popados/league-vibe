@@ -332,6 +332,7 @@ async function fetchMatchDetails(matchId, region = 'americas') {
             participantId: participant.participantId,
             puuid: participant.puuid,
             summonerName: participant.riotIdGameName,
+            tagLine: participant.riotIdTagline,
             summonerId: participant.summonerId,
             summonerLevel: participant.summonerLevel,
             championId: participant.championId,
@@ -705,6 +706,105 @@ app.post('/api/summoner/:region/:gameName/:tagLine/matches/save', async (req, re
   }
 });
 
+// Endpoint to save details for each match in match history (sequentially)
+app.post('/api/summoner/:region/:gameName/:tagLine/matches/save-details', async (req, res) => {
+  try {
+    const { region, gameName, tagLine } = req.params;
+    const requestedCount = req.body.count ?? req.query.count ?? 10;
+    const detailsCollection = await getMatchDetailsCollection();
+    const routingRegion = ROUTING_MAP[region.toLowerCase()];
+
+    if (!routingRegion) {
+      throw createHttpError(
+        400,
+        'Invalid region',
+        `Supported regions: ${Object.keys(ROUTING_MAP).join(', ')}`
+      );
+    }
+
+    const matchHistory = req.body.matchHistory || await fetchSummonerMatchHistory(region, gameName, tagLine, requestedCount);
+    const matches = Array.isArray(matchHistory?.matches) ? matchHistory.matches : [];
+
+    if (matches.length === 0) {
+      return res.status(400).json({
+        error: 'No matches to save',
+        details: 'Match history payload did not contain any matches'
+      });
+    }
+
+    const now = new Date();
+    const savedMatches = [];
+    const failedMatches = [];
+
+    for (const match of matches) {
+      const matchId = match?.matchId;
+
+      if (!matchId) {
+        failedMatches.push({
+          matchId: null,
+          error: 'Missing matchId in match history entry'
+        });
+        continue;
+      }
+
+      try {
+        const matchDetail = await fetchMatchDetails(matchId, routingRegion);
+        const documentToSave = {
+          matchId,
+          region: routingRegion,
+          gameName,
+          tagLine,
+          riotId: `${gameName}#${tagLine}`,
+          matchDetail,
+          updatedAt: now
+        };
+
+        await detailsCollection.updateOne(
+          {
+            matchId,
+            region: routingRegion
+          },
+          {
+            $set: documentToSave,
+            $setOnInsert: {
+              createdAt: now
+            }
+          },
+          {
+            upsert: true
+          }
+        );
+
+        savedMatches.push(matchId);
+      } catch (matchError) {
+        failedMatches.push({
+          matchId,
+          error: matchError.details || matchError.message
+        });
+      }
+    }
+
+    res.status(200).json({
+      message: `Saved ${savedMatches.length} of ${matches.length} match details`,
+      riotId: `${gameName}#${tagLine}`,
+      region: routingRegion,
+      requestedCount: normalizeMatchCount(requestedCount),
+      totalMatches: matches.length,
+      savedCount: savedMatches.length,
+      failedCount: failedMatches.length,
+      savedMatches,
+      failedMatches,
+      savedAt: now.toISOString()
+    });
+  } catch (error) {
+    console.error('Error saving all match details:', error);
+    res.status(error.status || 500).json({
+      error: error.error || 'Failed to save all match details',
+      details: error.details || error.message
+    });
+  }
+});
+
 // Endpoint to get specific match details by match ID
 app.get('/api/summoner/:gameName/:tagLine/matches/:matchId', async (req, res) => {
   try {
@@ -795,6 +895,7 @@ app.listen(PORT, () => {
   console.log(`👤 Summoner API available at http://localhost:${PORT}/api/summoner/:region/:gameName/:tagLine`);
   console.log(`📊 Match History API available at http://localhost:${PORT}/api/summoner/:region/:gameName/:tagLine/matches`);
   console.log(`💾 Match History Save API available at http://localhost:${PORT}/api/summoner/:region/:gameName/:tagLine/matches/save`);
+  console.log(`🗂️ Match Details Batch Save API available at http://localhost:${PORT}/api/summoner/:region/:gameName/:tagLine/matches/save-details`);
   console.log(`🎯 Match Details API available at http://localhost:${PORT}/api/summoner/:region/:gameName/:tagLine/matches/:matchId`);
   console.log(`🧾 Match Details Save API available at http://localhost:${PORT}/api/summoner/:gameName/:tagLine/matches/:matchId/save`);
 

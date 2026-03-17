@@ -6,6 +6,7 @@ export async function createMatchDetailView(
   matchId,
   cachedMatches = [],
   onSelectMatch = null,
+  onSelectSummoner = null,
   routingRegion = "americas"
 ) {
 
@@ -31,7 +32,16 @@ export async function createMatchDetailView(
     container.removeChild(loadingDiv);
 
     // Create match detail content
-    renderMatchDetail(container, matchDetail, cachedMatches, onSelectMatch, gameName, tag, routingRegion);
+    renderMatchDetail(
+      container,
+      matchDetail,
+      cachedMatches,
+      onSelectMatch,
+      onSelectSummoner,
+      gameName,
+      tag,
+      routingRegion
+    );
 
   } catch (error) {
     console.error('Failed to fetch match details:', error);
@@ -47,6 +57,7 @@ function renderMatchDetail(
   matchDetail,
   cachedMatches = [],
   onSelectMatch = null,
+  onSelectSummoner = null,
   gameName,
   tag,
   routingRegion = "americas"
@@ -54,7 +65,17 @@ function renderMatchDetail(
   const CURRENT_PATCH = '16.5.1'; // Default patch, will be updated from server if possible  
   const summonerRiotId = gameName && tag ? `${gameName}#${tag}` : gameName || "Unknown Summoner";
 
-  if (Array.isArray(cachedMatches) && cachedMatches.length > 0) {
+  const title = document.createElement("h2");
+  title.textContent = `Match ${matchDetail.metadata.matchId}`;
+  container.appendChild(title);
+
+  const summonerName = document.createElement("p");
+  summonerName.className = "match-detail-summoner";
+  summonerName.textContent = `Summoner: ${summonerRiotId}`;
+  container.appendChild(summonerName);
+
+
+    if (Array.isArray(cachedMatches) && cachedMatches.length > 0) {
     const selectorContainer = document.createElement("div");
     selectorContainer.className = "match-selector-container";
 
@@ -95,15 +116,6 @@ function renderMatchDetail(
     container.appendChild(selectorContainer);
   }
 
-  const title = document.createElement("h2");
-  title.textContent = `Match ${matchDetail.metadata.matchId}`;
-  container.appendChild(title);
-
-  const summonerName = document.createElement("p");
-  summonerName.className = "match-detail-summoner";
-  summonerName.textContent = `Summoner: ${summonerRiotId}`;
-  container.appendChild(summonerName);
-
   const info = document.createElement("div");
   info.className = "match-info";
 
@@ -141,7 +153,18 @@ function renderMatchDetail(
 
       const name = document.createElement("span");
       name.className = "participant-name";
-      name.textContent = `${participant.summonerName} (${participant.championName})`;
+      name.textContent = `${participant.summonerName}#${participant.tagLine} (${participant.championName})`;
+      if (
+        typeof onSelectSummoner === "function" &&
+        participant.summonerName &&
+        participant.tagLine
+      ) {
+        name.style.cursor = "pointer";
+        name.title = "Click to search this player";
+        name.addEventListener("click", () => {
+          onSelectSummoner(participant.summonerName, participant.tagLine);
+        });
+      }
 
       const kda = document.createElement("span");
       kda.className = "participant-kda";

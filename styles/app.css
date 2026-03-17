@@ -32,7 +32,7 @@ a {
 
 
 .app-container {
-    /* max-width: 1100px; */
+    max-width: 1400px;
     margin: 0 auto;
     padding: 24px;
 }
@@ -57,6 +57,15 @@ a {
 .app-navigation button:hover {
     background: var(--secondary-color);
     color: var(--last-color);
+}
+
+.app-navigation button.active,
+.app-navigation button[aria-current="page"] {
+    background: var(--link-color);
+    color: var(--nav-bg-color);
+    border-color: var(--main-color);
+    font-weight: 700;
+    box-shadow: 0 0 0 2px rgba(240, 183, 41, 0.25);
 }
 
 .summoner-search input,
@@ -784,7 +793,6 @@ a {
     list-style: none;
     padding: 0;
     margin: 0;
-    display: grid;
     gap: 10px;
 }
 
@@ -868,8 +876,14 @@ a {
     margin-top: 18px;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     gap: 10px;
+}
+
+.match-history-action-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
 }
 
 .save-history-button {
@@ -893,6 +907,10 @@ a {
 .save-history-button:disabled {
     cursor: wait;
     opacity: 0.7;
+}
+
+.save-all-details-button {
+    margin-left: auto;
 }
 
 .save-history-status {
@@ -950,6 +968,15 @@ a {
 
     .save-history-button {
         width: 100%;
+    }
+
+    .match-history-action-buttons {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .save-all-details-button {
+        margin-left: 0;
     }
 }
 
@@ -1329,7 +1356,6 @@ a {
 
 /* Summoner Profile View Styles */
 .summoner-profile-view {
-    max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
     margin-top: 20px;
@@ -1388,8 +1414,8 @@ a {
 }
 
 .summoner-profile-stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    display: flex;
+    justify-content: space-between;
     gap: 15px;
     margin-top: 15px;
 }

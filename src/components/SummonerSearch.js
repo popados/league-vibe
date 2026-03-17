@@ -1,19 +1,24 @@
 // UI component for entering a summoner Riot ID (gameName#tagLine) and region
 
-export function createSummonerSearch(onSearch) {
+export function createSummonerSearch(onSearch, cachedSummoner = null) {
   const container = document.createElement("div");
   container.className = "summoner-search";
 
+  const cachedGameName = cachedSummoner?.gameName || "";
+  const cachedTag = cachedSummoner?.tagLine || "";
+  const cachedRegion = cachedSummoner?.region?.toLowerCase() || "na";
+
   // Game name input
   const gameNameInput = document.createElement("input");
-  gameNameInput.placeholder = "Game name";
+  gameNameInput.placeholder = cachedGameName || "Game name";
+  gameNameInput.value = cachedGameName;
   gameNameInput.className = "summoner-input game-name-input";
 
   // Tag input
   const tagInput = document.createElement("input");
-  tagInput.placeholder = "Tag";
+  tagInput.placeholder = cachedTag || "Tag";
+  tagInput.value = cachedTag;
   tagInput.className = "summoner-input tag-input";
-  tagInput.value = "NA1"; // Default tag
 
   // Add # symbol between inputs
   const hashSymbol = document.createElement("span");
@@ -40,6 +45,7 @@ export function createSummonerSearch(onSearch) {
     option.textContent = region.label;
     regionSelect.appendChild(option);
   });
+  regionSelect.value = cachedRegion;
 
   const button = document.createElement("button");
   button.textContent = "Search";
