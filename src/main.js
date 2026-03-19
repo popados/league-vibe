@@ -34,13 +34,13 @@ function mapRegionToRouting(region = "NA") {
   return routingMap[normalized] || "americas";
 }
 
-async function handleSummonerSearch(gameName, tag, region) {
-  const apiEndpoint = `http://localhost:3001/api/summoner/${region}/${gameName}/${tag}/matches?count=10`;
+async function handleSummonerSearch(gameName, tag, region, count = 10) {
+  const apiEndpoint = `http://localhost:3001/api/summoner/${region}/${gameName}/${tag}/matches?count=${count}`;
   try {
     const response = await fetch(apiEndpoint);
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
     const data = await response.json();
-    currentSummoner = data.summoner;
+    currentSummoner = { ...data.summoner, matchCount: count };
     currentMatchHistory = data.matches || [];
     currentPage = "home";
     renderApp({ matchHistory: data.matches || [] });
@@ -137,6 +137,9 @@ function renderApp(data = {}) {
     case "champions":
       renderChampions(fullData);
       break;
+    case "champion-stats":
+      renderChampionStats(fullData);
+      break;
     case "items":
       renderItems(fullData);
       break;
@@ -166,7 +169,7 @@ function renderHome({ matchHistory = [], championStats = {} } = {}) {
     saveMatchHistory,
     saveAllMatchDetails
   );
-  const championStatsView = createChampionStatsView(championStats);
+  const championStatsView = createChampionStatsView(championStats, currentSummoner);
 
   app.append(search, matchHistoryView, championStatsView);
 }
@@ -190,6 +193,14 @@ function renderMatchHistory({ matchHistory = [], summoner } = {}) {
   app.appendChild(matchHistoryView);
 }
 
+
+function renderChampionStats({ championStats = {} } = {}) {
+  const search = createSummonerSearch(handleSummonerSearch, currentSummoner);
+  app.appendChild(search);
+
+  const championStatsView = createChampionStatsView(championStats, currentSummoner);
+  app.appendChild(championStatsView);
+}
 
 function renderChampions({ champions = [] } = {}) {
   const search = createSummonerSearch(handleSummonerSearch, currentSummoner);

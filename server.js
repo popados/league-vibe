@@ -76,7 +76,7 @@ function normalizeMatchCount(value) {
     return 10;
   }
 
-  return Math.max(1, Math.min(parsed, 20));
+  return Math.max(1, Math.min(parsed, 50));
 }
 
 async function getMongoClient() {
@@ -185,67 +185,69 @@ async function fetchSummonerMatchHistory(region, gameName, tagLine, count = 10) 
   }
 
   const matchIds = await matchlistResponse.json();
-  const matches = [];
+  const matchResults = await Promise.all(
+    matchIds.map(async (matchId) => {
+      try {
+        const matchUrl = `https://${routing}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
+        const matchResponse = await fetch(matchUrl, {
+          headers: {
+            'X-Riot-Token': RIOT_API_KEY
+          }
+        });
 
-  for (const matchId of matchIds) {
-    try {
-      const matchUrl = `https://${routing}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
-      const matchResponse = await fetch(matchUrl, {
-        headers: {
-          'X-Riot-Token': RIOT_API_KEY
+        if (!matchResponse.ok) {
+          return null;
         }
-      });
 
-      if (!matchResponse.ok) {
-        continue;
+        const matchData = await matchResponse.json();
+        const participant = matchData.info.participants.find((entry) => entry.puuid === puuid);
+
+        if (!participant) {
+          return null;
+        }
+
+        return {
+          matchId: matchData.metadata.matchId,
+          gameMode: matchData.info.gameMode,
+          gameType: matchData.info.gameType,
+          gameDuration: matchData.info.gameDuration,
+          gameCreation: matchData.info.gameCreation,
+          gameVersion: matchData.info.gameVersion,
+          mapId: matchData.info.mapId,
+          queueId: matchData.info.queueId,
+          participant: {
+            championId: participant.championId,
+            championName: participant.championName,
+            win: participant.win,
+            kills: participant.kills,
+            deaths: participant.deaths,
+            assists: participant.assists,
+            totalDamageDealt: participant.totalDamageDealt,
+            totalDamageTaken: participant.totalDamageTaken,
+            goldEarned: participant.goldEarned,
+            totalMinionsKilled: participant.totalMinionsKilled,
+            neutralMinionsKilled: participant.neutralMinionsKilled,
+            champLevel: participant.champLevel,
+            item0: participant.item0,
+            item1: participant.item1,
+            item2: participant.item2,
+            item3: participant.item3,
+            item4: participant.item4,
+            item5: participant.item5,
+            item6: participant.item6,
+            summoner1Id: participant.summoner1Id,
+            summoner2Id: participant.summoner2Id,
+            teamId: participant.teamId
+          },
+          teams: matchData.info.teams
+        };
+      } catch (matchError) {
+        console.warn(`Failed to fetch match ${matchId}:`, matchError.message);
+        return null;
       }
-
-      const matchData = await matchResponse.json();
-      const participant = matchData.info.participants.find((entry) => entry.puuid === puuid);
-
-      if (!participant) {
-        continue;
-      }
-
-      matches.push({
-        matchId: matchData.metadata.matchId,
-        gameMode: matchData.info.gameMode,
-        gameType: matchData.info.gameType,
-        gameDuration: matchData.info.gameDuration,
-        gameCreation: matchData.info.gameCreation,
-        gameVersion: matchData.info.gameVersion,
-        mapId: matchData.info.mapId,
-        queueId: matchData.info.queueId,
-        participant: {
-          championId: participant.championId,
-          championName: participant.championName,
-          win: participant.win,
-          kills: participant.kills,
-          deaths: participant.deaths,
-          assists: participant.assists,
-          totalDamageDealt: participant.totalDamageDealt,
-          totalDamageTaken: participant.totalDamageTaken,
-          goldEarned: participant.goldEarned,
-          totalMinionsKilled: participant.totalMinionsKilled,
-          neutralMinionsKilled: participant.neutralMinionsKilled,
-          champLevel: participant.champLevel,
-          item0: participant.item0,
-          item1: participant.item1,
-          item2: participant.item2,
-          item3: participant.item3,
-          item4: participant.item4,
-          item5: participant.item5,
-          item6: participant.item6,
-          summoner1Id: participant.summoner1Id,
-          summoner2Id: participant.summoner2Id,
-          teamId: participant.teamId
-        },
-        teams: matchData.info.teams
-      });
-    } catch (matchError) {
-      console.warn(`Failed to fetch match ${matchId}:`, matchError.message);
-    }
-  }
+    })
+  );
+  const matches = matchResults.filter(Boolean);
 
   return {
     summoner: {
@@ -419,6 +421,39 @@ async function fetchMatchDetails(matchId, region = 'americas') {
       }))
     }
   };
+}
+
+function summarizeCachedChampionStats(matches = []) {
+  const championStats = {};
+
+  matches.forEach((match) => {
+    const participant = match?.participant;
+    const championName = participant?.championName;
+
+    if (!participant || !championName) {
+      return;
+    }
+
+    if (!championStats[championName]) {
+      championStats[championName] = {
+        games: 0,
+        wins: 0,
+        kills: 0,
+        deaths: 0,
+        assists: 0
+      };
+    }
+
+    championStats[championName].games += 1;
+    championStats[championName].wins += participant.win ? 1 : 0;
+    championStats[championName].kills += participant.kills ?? 0;
+    championStats[championName].deaths += participant.deaths ?? 0;
+    championStats[championName].assists += participant.assists ?? 0;
+  });
+
+  return Object.fromEntries(
+    Object.entries(championStats).sort((left, right) => right[1].games - left[1].games || left[0].localeCompare(right[0]))
+  );
 }
 
 // Endpoint to get all champions
@@ -643,6 +678,61 @@ app.get('/api/summoner/:region/:gameName/:tagLine/matches', async (req, res) => 
   }
 });
 
+app.get('/api/summoner/:region/:gameName/:tagLine/champion-stats', async (req, res) => {
+  try {
+    const { region, gameName, tagLine } = req.params;
+    const collection = await getMatchHistoryCollection();
+    const cachedMatchHistory = await collection.findOne(
+      {
+        region: region.toUpperCase(),
+        gameName,
+        tagLine
+      },
+      {
+        projection: {
+          region: 1,
+          gameName: 1,
+          tagLine: 1,
+          riotId: 1,
+          matchCount: 1,
+          requestedCount: 1,
+          matchHistory: 1
+        }
+      }
+    );
+
+    if (!cachedMatchHistory) {
+      throw createHttpError(
+        404,
+        'Cached champion stats not found',
+        'Save match history to MongoDB before requesting champion stats'
+      );
+    }
+
+    const matches = Array.isArray(cachedMatchHistory?.matchHistory?.matches)
+      ? cachedMatchHistory.matchHistory.matches
+      : [];
+
+    res.json({
+      summoner: {
+        region: cachedMatchHistory.region,
+        gameName: cachedMatchHistory.gameName,
+        tagLine: cachedMatchHistory.tagLine,
+        riotId: cachedMatchHistory.riotId
+      },
+      totalMatches: cachedMatchHistory.matchCount ?? matches.length,
+      requestedCount: cachedMatchHistory.requestedCount ?? matches.length,
+      championStats: summarizeCachedChampionStats(matches)
+    });
+  } catch (error) {
+    console.error('Error fetching cached champion stats:', error);
+    res.status(error.status || 500).json({
+      error: error.error || 'Failed to fetch cached champion stats',
+      details: error.details || error.message
+    });
+  }
+});
+
 // Endpoint to save hosted match history JSON to MongoDB
 app.post('/api/summoner/:region/:gameName/:tagLine/matches/save', async (req, res) => {
   try {
@@ -734,7 +824,18 @@ app.post('/api/summoner/:region/:gameName/:tagLine/matches/save-details', async 
 
     const now = new Date();
     const savedMatches = [];
+    const skippedMatches = [];
     const failedMatches = [];
+
+    // Bulk-check which matchIds are already in the database in a single query
+    const allMatchIds = matches.map((m) => m?.matchId).filter(Boolean);
+    const existingDocs = await detailsCollection
+      .find(
+        { matchId: { $in: allMatchIds }, region: routingRegion },
+        { projection: { matchId: 1 } }
+      )
+      .toArray();
+    const alreadySavedIds = new Set(existingDocs.map((d) => d.matchId));
 
     for (const match of matches) {
       const matchId = match?.matchId;
@@ -744,6 +845,12 @@ app.post('/api/summoner/:region/:gameName/:tagLine/matches/save-details', async 
           matchId: null,
           error: 'Missing matchId in match history entry'
         });
+        continue;
+      }
+
+      // Skip Riot API fetch and upsert if already saved
+      if (alreadySavedIds.has(matchId)) {
+        skippedMatches.push(matchId);
         continue;
       }
 
@@ -785,14 +892,16 @@ app.post('/api/summoner/:region/:gameName/:tagLine/matches/save-details', async 
     }
 
     res.status(200).json({
-      message: `Saved ${savedMatches.length} of ${matches.length} match details`,
+      message: `Saved ${savedMatches.length} new, skipped ${skippedMatches.length} existing, ${failedMatches.length} failed out of ${matches.length} matches`,
       riotId: `${gameName}#${tagLine}`,
       region: routingRegion,
       requestedCount: normalizeMatchCount(requestedCount),
       totalMatches: matches.length,
       savedCount: savedMatches.length,
+      skippedCount: skippedMatches.length,
       failedCount: failedMatches.length,
       savedMatches,
+      skippedMatches,
       failedMatches,
       savedAt: now.toISOString()
     });
@@ -850,6 +959,18 @@ app.post('/api/summoner/:gameName/:tagLine/matches/:matchId/save', async (req, r
       projection: { _id: 1 }
     });
 
+    // If already saved and no new data was provided in the request body, skip the upsert
+    if (existingDocument && !req.body.matchDetail) {
+      return res.status(200).json({
+        message: 'Match details already exist in MongoDB — skipped',
+        documentId: existingDocument._id,
+        matchId,
+        region: region.toLowerCase(),
+        skipped: true,
+        savedAt: now.toISOString()
+      });
+    }
+
     await collection.updateOne(
       filter,
       {
@@ -868,10 +989,11 @@ app.post('/api/summoner/:gameName/:tagLine/matches/:matchId/save', async (req, r
     });
 
     res.status(existingDocument ? 200 : 201).json({
-      message: 'Match details saved to MongoDB',
+      message: existingDocument ? 'Match details updated in MongoDB' : 'Match details saved to MongoDB',
       documentId: savedDocument?._id || null,
       matchId,
       region: region.toLowerCase(),
+      skipped: false,
       savedAt: now.toISOString()
     });
   } catch (error) {

@@ -83,6 +83,22 @@ a {
     color: var(--last-color);
 }
 
+.champion-stats-controls {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 16px 0;
+}
+
+.champion-stats-select {
+    min-width: 180px;
+    padding: 8px 12px;
+    background: var(--nav-bg-color);
+    border: 1px solid var(--link-color);
+    color: var(--main-color);
+    border-radius: 4px;
+}
+
 .match-history,
 .champion-stats,
 .champions-view,

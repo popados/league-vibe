@@ -4,6 +4,8 @@ export function createSummonerSearch(onSearch, cachedSummoner = null) {
   const container = document.createElement("div");
   container.className = "summoner-search";
 
+  const cachedCount = cachedSummoner?.matchCount || 10;
+
   const cachedGameName = cachedSummoner?.gameName || "";
   const cachedTag = cachedSummoner?.tagLine || "";
   const cachedRegion = cachedSummoner?.region?.toLowerCase() || "na";
@@ -47,6 +49,16 @@ export function createSummonerSearch(onSearch, cachedSummoner = null) {
   });
   regionSelect.value = cachedRegion;
 
+  const countSelect = document.createElement("select");
+  countSelect.className = "count-select";
+  [10, 20].forEach((n) => {
+    const option = document.createElement("option");
+    option.value = n;
+    option.textContent = `${n} matches`;
+    countSelect.appendChild(option);
+  });
+  countSelect.value = cachedCount;
+
   const button = document.createElement("button");
   button.textContent = "Search";
   button.className = "search-button";
@@ -54,13 +66,14 @@ export function createSummonerSearch(onSearch, cachedSummoner = null) {
     const gameName = gameNameInput.value.trim();
     const tag = tagInput.value.trim();
     const region = regionSelect.value;
+    const count = Number(countSelect.value);
 
     if (!gameName || !tag) {
       alert("Please enter both game name and tag");
       return;
     }
 
-    onSearch(gameName, tag, region);
+    onSearch(gameName, tag, region, count);
   };
 
   // Allow Enter key to trigger search
@@ -72,6 +85,6 @@ export function createSummonerSearch(onSearch, cachedSummoner = null) {
     });
   });
 
-  container.append(gameNameInput, hashSymbol, tagInput, regionSelect, button);
+  container.append(gameNameInput, hashSymbol, tagInput, regionSelect, countSelect, button);
   return container;
 }

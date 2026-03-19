@@ -15,6 +15,10 @@
 
 A modern web application that provides League of Legends match history, champion statistics, and item data using the official Riot Games API.
 
+Using node/javascript, css, and html.
+
+This site searches for a player and displays their most recent matches. When clicking on a match a more detailed pane shows both teams.
+
 ***
 
 ## 🚀 Quick Start
@@ -196,7 +200,7 @@ Checklist:
 - Schema
 - Validation
 - Count selection for match history
-- Check database for the same record
+- Check database for duplicates
 
 ***
 
@@ -213,4 +217,3 @@ Notes :
 - CORS enabled for frontend requests
 - API key required for summoner/match endpoints
 </details>
-  

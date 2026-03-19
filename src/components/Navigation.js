@@ -9,6 +9,7 @@ export function createNavigation(onNavigate, currentPage = "home") {
     { id: "match-history", label: "Match History" },
     { id: "match-details", label: "Match Details" },
     { id: "summoner-profile", label: "Summoner Profile" },
+    { id: "champion-stats", label: "Champion Stats" },
     { id: "champions", label: "Champions" },
     { id: "items", label: "Items" },
   ];
