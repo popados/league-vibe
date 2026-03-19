@@ -15,12 +15,9 @@
 
 A modern web application that provides League of Legends match history, champion statistics, and item data using the official Riot Games API.
 
-Using node.js, JavaScript, CSS, and HTML.
+Using node/javascript, css, and html.
 
-This site searches for a player and displays their most recent matches. When clicking on a match, a more detailed pane shows both teams.
-
-This prototype has no data associated with it, but has a GitHub repository at: https://github.com/popados/league-vibe
-
+This site searches for a player and displays their most recent matches. When clicking on a match a more detailed pane shows both teams.
 
 ***
 
