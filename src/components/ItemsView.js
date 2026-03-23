@@ -101,6 +101,16 @@ export function createItemsView(items = []) {
     <option value="3001+">3001+ gold</option>
   `;
 
+  // Search input
+  const searchInput = document.createElement("input");
+  searchInput.type = "search";
+  searchInput.placeholder = "Search by name…";
+  searchInput.className = "filter-search";
+
+  const searchLabel = document.createElement("label");
+  searchLabel.textContent = "Name: ";
+  searchLabel.appendChild(searchInput);
+
   // Filter labels
   const mapLabel = document.createElement("label");
   mapLabel.textContent = "Map: ";
@@ -114,7 +124,7 @@ export function createItemsView(items = []) {
   costLabel.textContent = "Cost: ";
   costLabel.appendChild(costFilter);
 
-  filtersContainer.append(mapLabel, tierLabel, costLabel);
+  filtersContainer.append(searchLabel, mapLabel, tierLabel, costLabel);
   container.appendChild(filtersContainer);
 
   const list = document.createElement("div");
@@ -125,9 +135,14 @@ export function createItemsView(items = []) {
     const selectedMap = mapFilter.value;
     const selectedTier = tierFilter.value;
     const selectedCost = costFilter.value;
+    const searchQuery = searchInput.value.trim().toLowerCase();
 
     // Filter items based on selections
     const filteredItems = items.filter(item => {
+      // Name search filter
+      if (searchQuery && !item.name.toLowerCase().includes(searchQuery)) {
+        return false;
+      }
       // Map filter
       if (selectedMap && (!item.maps || !item.maps[selectedMap])) {
         return false;
@@ -205,6 +220,7 @@ export function createItemsView(items = []) {
   }
 
   // Add event listeners to filters
+  searchInput.addEventListener('input', updateItemDisplay);
   mapFilter.addEventListener('change', updateItemDisplay);
   tierFilter.addEventListener('change', updateItemDisplay);
   costFilter.addEventListener('change', updateItemDisplay);

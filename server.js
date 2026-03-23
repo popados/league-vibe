@@ -20,7 +20,7 @@ const RIOT_API_BASE = 'https://REGION.api.riotgames.com';
 const AMERICAS_API_BASE = 'https://americas.api.riotgames.com';
 
 // Current patch version (you might want to fetch this dynamically)
-const CURRENT_PATCH = '16.5.1';
+const CURRENT_PATCH = '16.6.1';
 
 // Riot API Key (should be set as environment variable)
 const RIOT_API_KEY = process.env.RIOT_API_KEY || 'your_riot_api_key_here';
@@ -28,6 +28,7 @@ const MONGODB_URI = process.env.MONGODB_URI;
 const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || 'matchHistories';
 const MONGODB_MATCH_HISTORY_COLLECTION = process.env.MONGODB_MATCH_HISTORY_COLLECTION || 'matchHistories';
 const MONGODB_MATCH_DETAILS_COLLECTION = process.env.MONGODB_MATCH_DETAILS_COLLECTION || 'matchDetails';
+const SUMMONERS_RIFT_MAX_COORDINATE = 14870;
 
 let mongoClientPromise = null;
 
@@ -239,7 +240,11 @@ async function fetchSummonerMatchHistory(region, gameName, tagLine, count = 10) 
             summoner2Id: participant.summoner2Id,
             teamId: participant.teamId
           },
-          teams: matchData.info.teams
+          teams: matchData.info.teams,
+          allParticipants: matchData.info.participants.map((p) => ({
+            championName: p.championName,
+            teamId: p.teamId
+          }))
         };
       } catch (matchError) {
         console.warn(`Failed to fetch match ${matchId}:`, matchError.message);
@@ -423,6 +428,114 @@ async function fetchMatchDetails(matchId, region = 'americas') {
   };
 }
 
+async function fetchMatchTimeline(matchId, region = 'americas') {
+  if (!RIOT_API_KEY || RIOT_API_KEY === 'YOUR_API_KEY_HERE') {
+    throw createHttpError(
+      500,
+      'Riot API key not configured',
+      'Please set the RIOT_API_KEY environment variable'
+    );
+  }
+
+  if (!['americas', 'asia', 'europe'].includes(region.toLowerCase())) {
+    throw createHttpError(
+      400,
+      'Invalid region',
+      'Supported regions: americas, asia, europe'
+    );
+  }
+
+  const normalizedRegion = region.toLowerCase();
+  const timelineUrl = `https://${normalizedRegion}.api.riotgames.com/lol/match/v5/matches/${matchId}/timeline`;
+  const timelineResponse = await fetch(timelineUrl, {
+    headers: {
+      'X-Riot-Token': RIOT_API_KEY
+    }
+  });
+
+  if (!timelineResponse.ok) {
+    if (timelineResponse.status === 404) {
+      throw createHttpError(
+        404,
+        'Timeline not found',
+        `Timeline for match ID "${matchId}" not found`
+      );
+    }
+
+    throw createHttpError(
+      timelineResponse.status,
+      'Failed to fetch match timeline',
+      `Failed to fetch match timeline: ${timelineResponse.status}`
+    );
+  }
+
+  return timelineResponse.json();
+}
+
+function mapPositionToPercent(position) {
+  if (!position || typeof position.x !== 'number' || typeof position.y !== 'number') {
+    return null;
+  }
+
+  const left = Math.max(0, Math.min(100, (position.x / SUMMONERS_RIFT_MAX_COORDINATE) * 100));
+  const top = Math.max(0, Math.min(100, 100 - ((position.y / SUMMONERS_RIFT_MAX_COORDINATE) * 100)));
+
+  return {
+    left,
+    top
+  };
+}
+
+async function fetchInitialFramePlayerPositions(matchId, region = 'americas') {
+  const [matchDetail, timelineData] = await Promise.all([
+    fetchMatchDetails(matchId, region),
+    fetchMatchTimeline(matchId, region)
+  ]);
+
+  const selectedFrames = timelineData?.info?.frames || [];
+//   const selectedFrames = timelineFrames.slice(0, 2);
+  const allParticipants = matchDetail.info.teams.flatMap((team) => team.participants);
+
+  const frames = selectedFrames.map((frame, index) => {
+    const participantFrames = frame?.participantFrames || {};
+    const participants = allParticipants
+      .map((participant) => {
+        const frameParticipant = participantFrames[String(participant.participantId)] || participantFrames[participant.participantId];
+        const rawPosition = frameParticipant?.position || null;
+        const mapPosition = mapPositionToPercent(rawPosition);
+
+        return {
+          participantId: participant.participantId,
+          teamId: participant.teamId,
+          win: participant.win,
+          summonerName: participant.summonerName,
+          tagLine: participant.tagLine,
+          championName: participant.championName,
+          position: rawPosition,
+          mapPosition
+        };
+      })
+      .filter((participant) => participant.mapPosition);
+
+    return {
+      frameIndex: index,
+      frameNumber: index + 1,
+      timestamp: frame?.timestamp ?? null,
+      participants
+    };
+  });
+
+  const firstFrame = frames[0] || null;
+
+  return {
+    matchId,
+    region: region.toLowerCase(),
+    firstFrameTimestamp: firstFrame?.timestamp ?? null,
+    participants: firstFrame?.participants || [],
+    frames
+  };
+}
+
 function summarizeCachedChampionStats(matches = []) {
   const championStats = {};
 
@@ -436,6 +549,7 @@ function summarizeCachedChampionStats(matches = []) {
 
     if (!championStats[championName]) {
       championStats[championName] = {
+        championId: participant.championId ?? null,
         games: 0,
         wins: 0,
         kills: 0,
@@ -484,6 +598,69 @@ app.get('/api/champions', async (req, res) => {
     res.status(500).json({
       error: 'Failed to fetch champions from Riot API',
       details: error.message
+    });
+  }
+});
+
+// Endpoint to get global champion selection rates from all saved match details
+app.get('/api/champions/selection-rate', async (req, res) => {
+  try {
+    const detailsCollection = await getMatchDetailsCollection();
+    const matchDocs = await detailsCollection
+      .find({}, { projection: { matchId: 1, 'matchDetail.info.teams.participants.championName': 1, 'matchDetail.info.participants.championName': 1 } })
+      .toArray();
+
+    const totalGames = matchDocs.length;
+    const selectedCounts = {};
+
+    matchDocs.forEach((doc) => {
+      const teamParticipants = (doc.matchDetail?.info?.teams || []).flatMap((team) => team.participants || []);
+      const fallbackParticipants = doc.matchDetail?.info?.participants || [];
+      const participants = teamParticipants.length > 0 ? teamParticipants : fallbackParticipants;
+
+      participants.forEach((participant) => {
+        const championName = participant?.championName;
+        if (!championName) {
+          return;
+        }
+
+        selectedCounts[championName] = (selectedCounts[championName] || 0) + 1;
+      });
+    });
+
+    const championResponse = await fetch(`${RIOT_DDRAGON_BASE}/cdn/${CURRENT_PATCH}/data/en_US/champion.json`);
+    if (!championResponse.ok) {
+      throw new Error(`Riot API error: ${championResponse.status}`);
+    }
+
+    const championData = await championResponse.json();
+    const allChampionNames = Object.values(championData.data).map((champion) => champion.name);
+
+    const champions = allChampionNames
+      .map((championName) => {
+        const selected = selectedCounts[championName] || 0;
+        const selectionRate = totalGames > 0 ? selected / totalGames : 0;
+
+        return {
+          championName,
+          selected,
+          total: totalGames,
+          selectionRate,
+          selectionRatePercent: Number((selectionRate * 100).toFixed(2)),
+          selectionRateLabel: `${selected}/${totalGames}`
+        };
+      })
+      .sort((left, right) => right.selectionRate - left.selectionRate || left.championName.localeCompare(right.championName));
+
+    res.json({
+      totalGames,
+      champions
+    });
+  } catch (error) {
+    console.error('Error fetching champion selection rates:', error);
+    res.status(error.status || 500).json({
+      error: error.error || 'Failed to fetch champion selection rates',
+      details: error.details || error.message
     });
   }
 });
@@ -681,48 +858,141 @@ app.get('/api/summoner/:region/:gameName/:tagLine/matches', async (req, res) => 
 app.get('/api/summoner/:region/:gameName/:tagLine/champion-stats', async (req, res) => {
   try {
     const { region, gameName, tagLine } = req.params;
-    const collection = await getMatchHistoryCollection();
-    const cachedMatchHistory = await collection.findOne(
-      {
-        region: region.toUpperCase(),
-        gameName,
-        tagLine
-      },
+    const historyCollection = await getMatchHistoryCollection();
+    const detailsCollection = await getMatchDetailsCollection();
+
+    // Get the summoner's puuid from the match history document
+    const summonerDoc = await historyCollection.findOne(
+      { region: region.toUpperCase(), gameName, tagLine },
       {
         projection: {
-          region: 1,
+          puuid: 1,
+          riotId: 1,
           gameName: 1,
           tagLine: 1,
-          riotId: 1,
+          region: 1,
           matchCount: 1,
           requestedCount: 1,
-          matchHistory: 1
+          'matchHistory.matches': 1
         }
       }
     );
 
-    if (!cachedMatchHistory) {
+    if (!summonerDoc?.puuid) {
       throw createHttpError(
         404,
-        'Cached champion stats not found',
+        'Summoner not found in database',
         'Save match history to MongoDB before requesting champion stats'
       );
     }
 
-    const matches = Array.isArray(cachedMatchHistory?.matchHistory?.matches)
-      ? cachedMatchHistory.matchHistory.matches
+    const { puuid } = summonerDoc;
+
+    // Find ALL match details in the database where this summoner participated
+    const allMatchDocs = await detailsCollection
+      .find(
+        { 'matchDetail.metadata.participants': puuid },
+        { projection: { matchId: 1, 'matchDetail.info.teams.participants': 1, 'matchDetail.info.participants': 1 } }
+      )
+      .toArray();
+
+    // Extract the summoner-specific participant entry from each match detail document
+    const missingParticipantMatchIds = [];
+    const debugMatches = [];
+    const detailParticipantMatches = allMatchDocs
+      .map((doc) => {
+        const teamParticipants = (doc.matchDetail?.info?.teams || []).flatMap((team) => team.participants || []);
+        const fallbackParticipants = doc.matchDetail?.info?.participants || [];
+        const allParticipants = teamParticipants.length > 0 ? teamParticipants : fallbackParticipants;
+        const participant = allParticipants.find(
+          (p) => p.puuid === puuid
+        );
+
+        if (!participant) {
+          missingParticipantMatchIds.push(doc.matchId || null);
+          debugMatches.push({
+            source: 'matchDetails',
+            matchId: doc.matchId || null,
+            puuid,
+            championId: null,
+            championName: null,
+            hasParticipant: false,
+            hasChampionId: false
+          });
+          return null;
+        }
+
+        debugMatches.push({
+          source: 'matchDetails',
+          matchId: doc.matchId || null,
+          puuid,
+          championId: participant.championId ?? null,
+          championName: participant.championName || null,
+          hasParticipant: true,
+          hasChampionId: typeof participant.championId === 'number'
+        });
+
+        return { matchId: doc.matchId || null, participant };
+      })
+      .filter(Boolean);
+
+    // Fallback: use cached match history participant records when no detailed match docs exist
+    const historyMatches = Array.isArray(summonerDoc?.matchHistory?.matches)
+      ? summonerDoc.matchHistory.matches
       : [];
+
+    const historyParticipantMatches = historyMatches
+      .map((match) => {
+        const participant = match?.participant;
+        if (!participant) {
+          return null;
+        }
+
+        debugMatches.push({
+          source: 'matchHistory',
+          matchId: match.matchId || null,
+          puuid,
+          championId: participant.championId ?? null,
+          championName: participant.championName || null,
+          hasParticipant: true,
+          hasChampionId: typeof participant.championId === 'number'
+        });
+
+        return { matchId: match.matchId || null, participant };
+      })
+      .filter(Boolean);
+
+    const usingFallback = detailParticipantMatches.length === 0 && historyParticipantMatches.length > 0;
+    const participantMatches = usingFallback ? historyParticipantMatches : detailParticipantMatches;
+    const dataSource = usingFallback ? 'matchHistory' : 'matchDetails';
 
     res.json({
       summoner: {
-        region: cachedMatchHistory.region,
-        gameName: cachedMatchHistory.gameName,
-        tagLine: cachedMatchHistory.tagLine,
-        riotId: cachedMatchHistory.riotId
+        region: summonerDoc.region,
+        gameName: summonerDoc.gameName,
+        tagLine: summonerDoc.tagLine,
+        riotId: summonerDoc.riotId
       },
-      totalMatches: cachedMatchHistory.matchCount ?? matches.length,
-      requestedCount: cachedMatchHistory.requestedCount ?? matches.length,
-      championStats: summarizeCachedChampionStats(matches)
+      totalMatches: dataSource === 'matchHistory'
+        ? (summonerDoc.matchCount ?? historyMatches.length)
+        : allMatchDocs.length,
+      requestedCount: dataSource === 'matchHistory'
+        ? (summonerDoc.requestedCount ?? historyMatches.length)
+        : allMatchDocs.length,
+      championStats: summarizeCachedChampionStats(participantMatches),
+      debug: {
+        dataSource,
+        matchedDocuments: allMatchDocs.length,
+        matchedParticipants: detailParticipantMatches.length,
+        fallbackMatchedParticipants: historyParticipantMatches.length,
+        missingParticipants: missingParticipantMatchIds.length,
+        missingParticipantMatchIds,
+        matchesWithChampionId: debugMatches.filter((match) => match.hasChampionId).length,
+        matchesMissingChampionId: debugMatches.filter((match) => !match.hasChampionId).length,
+        matchIdsWithChampionId: debugMatches.filter((match) => match.hasChampionId).map((match) => match.matchId),
+        matchIdsMissingChampionId: debugMatches.filter((match) => !match.hasChampionId).map((match) => match.matchId),
+        matches: debugMatches
+      }
     });
   } catch (error) {
     console.error('Error fetching cached champion stats:', error);
@@ -926,6 +1196,21 @@ app.get('/api/summoner/:gameName/:tagLine/matches/:matchId', async (req, res) =>
     console.error('Error fetching match details:', error);
     res.status(error.status || 500).json({
       error: error.error || 'Failed to fetch match details',
+      details: error.details || error.message
+    });
+  }
+});
+
+app.get('/api/summoner/:gameName/:tagLine/matches/:matchId/timeline', async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const { region = 'americas' } = req.query;
+    const timelineSummary = await fetchInitialFramePlayerPositions(matchId, region);
+    res.json(timelineSummary);
+  } catch (error) {
+    console.error('Error fetching match timeline:', error);
+    res.status(error.status || 500).json({
+      error: error.error || 'Failed to fetch match timeline',
       details: error.details || error.message
     });
   }

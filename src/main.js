@@ -8,12 +8,15 @@ import { createChampionsView } from "./components/ChampionsView.js";
 import { createItemsView } from "./components/ItemsView.js";
 import { createMatchDetailView } from "./components/MatchDetailView.js";
 import { createSummonerProfileView } from "./components/SummonerProfileView.js";
+import { createMapView } from "./components/mapView.js";
+import { createTotalChampsView } from "./components/TotalChampsView.js";
 
 const app = document.getElementById("app");
 
 let currentPage = "home";
 let currentSummoner = null; // Cache for the currently searched summoner
 let currentMatchHistory = []; // Cache for the current match history
+let currentMatchId = null; // Cache for the currently selected match
 
 function mapRegionToRouting(region = "NA") {
   const normalized = region.toLowerCase();
@@ -42,6 +45,7 @@ async function handleSummonerSearch(gameName, tag, region, count = 10) {
     const data = await response.json();
     currentSummoner = { ...data.summoner, matchCount: count };
     currentMatchHistory = data.matches || [];
+    currentMatchId = currentMatchHistory[0]?.matchId || null;
     currentPage = "home";
     renderApp({ matchHistory: data.matches || [] });
   } catch (error) {
@@ -137,6 +141,9 @@ function renderApp(data = {}) {
     case "champions":
       renderChampions(fullData);
       break;
+    case "champions-selected":
+      renderTotalChamps();
+      break;
     case "champion-stats":
       renderChampionStats(fullData);
       break;
@@ -149,10 +156,68 @@ function renderApp(data = {}) {
     case "summoner-profile":
       renderSummonerProfile(fullData.summoner);
       break;
+    case "map-summoners-rift":
+      renderMapView(fullData);
+      break;
     default:
       renderHome(fullData);
   }
 }
+
+async function renderMapView({ matchId } = {}) {
+  const search = createSummonerSearch(handleSummonerSearch, currentSummoner);
+  app.appendChild(search);
+
+  if (!currentSummoner?.gameName || !currentSummoner?.tagLine) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'loading';
+    errorDiv.textContent = 'No summoner selected. Search for a summoner to view map data.';
+    app.appendChild(errorDiv);
+    return;
+  }
+
+  const resolvedMatchId = matchId || currentMatchId || currentMatchHistory[0]?.matchId;
+  if (!resolvedMatchId) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'loading';
+    errorDiv.textContent = 'No match data available. Search for a summoner first.';
+    app.appendChild(errorDiv);
+    return;
+  }
+
+  currentMatchId = resolvedMatchId;
+
+  const loadingDiv = document.createElement('div');
+  loadingDiv.className = 'loading';
+  loadingDiv.textContent = 'Loading map positions...';
+  app.appendChild(loadingDiv);
+
+  try {
+    const routingRegion = mapRegionToRouting(currentSummoner.region);
+    const response = await fetch(
+      `http://localhost:3001/api/summoner/${encodeURIComponent(currentSummoner.gameName)}/${encodeURIComponent(currentSummoner.tagLine)}/matches/${encodeURIComponent(resolvedMatchId)}/timeline?region=${encodeURIComponent(routingRegion)}`
+    );
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.details || data.error || `Server error: ${response.status}`);
+    }
+
+    app.removeChild(loadingDiv);
+    const mapView = createMapView(data, currentMatchHistory, (selectedMatchId) => {
+      currentMatchId = selectedMatchId;
+      currentPage = 'map - summoners rift';
+      renderApp({ matchId: selectedMatchId });
+    });
+    app.appendChild(mapView);
+  } catch (error) {
+    console.error('Failed to fetch map data from server:', error);
+    loadingDiv.textContent = `Failed to load map data: ${error.message}`;
+    loadingDiv.style.color = '#f44336';
+  }
+}
+
+
 
 function renderHome({ matchHistory = [], championStats = {} } = {}) {
   const search = createSummonerSearch(handleSummonerSearch, currentSummoner);
@@ -161,6 +226,7 @@ function renderHome({ matchHistory = [], championStats = {} } = {}) {
     matchHistory,
     currentSummoner,
     (match) => {
+      currentMatchId = match.matchId;
       currentPage = "match-details";
       renderApp({
         matchId: match.matchId
@@ -182,6 +248,7 @@ function renderMatchHistory({ matchHistory = [], summoner } = {}) {
     matchHistory,
     summoner,
     (match) => {
+      currentMatchId = match.matchId;
       currentPage = "match-details";
       renderApp({
         matchId: match.matchId
@@ -200,6 +267,14 @@ function renderChampionStats({ championStats = {} } = {}) {
 
   const championStatsView = createChampionStatsView(championStats, currentSummoner);
   app.appendChild(championStatsView);
+}
+
+function renderTotalChamps() {
+  const search = createSummonerSearch(handleSummonerSearch, currentSummoner);
+  app.appendChild(search);
+
+  const totalChampsView = createTotalChampsView();
+  app.appendChild(totalChampsView);
 }
 
 function renderChampions({ champions = [] } = {}) {
@@ -304,7 +379,7 @@ async function renderMatchDetail({ matchId, summoner } = {}) {
   const tag = currentSummoner.tagLine;
   const region = currentSummoner.region?.toLowerCase() || "na";
   const routingRegion = mapRegionToRouting(currentSummoner.region);
-  const resolvedMatchId = matchId || currentMatchHistory[0]?.matchId;
+  const resolvedMatchId = matchId || currentMatchId || currentMatchHistory[0]?.matchId;
   if (!resolvedMatchId) {
     const errorDiv = document.createElement('div');
     errorDiv.className = 'loading';
@@ -312,12 +387,14 @@ async function renderMatchDetail({ matchId, summoner } = {}) {
     app.appendChild(errorDiv);
     return;
   }
+  currentMatchId = resolvedMatchId;
   const matchDetailView = await createMatchDetailView(
     gameName,
     tag,
     resolvedMatchId,
     currentMatchHistory,
     (selectedMatchId) => {
+      currentMatchId = selectedMatchId;
       currentPage = "match-details";
       renderApp({ matchId: selectedMatchId });
     },
@@ -332,8 +409,12 @@ async function renderMatchDetail({ matchId, summoner } = {}) {
         }
 
         const data = await response.json();
-        currentSummoner = data.summoner;
+        currentSummoner = {
+          ...data.summoner,
+          matchCount: currentSummoner?.matchCount || 10
+        };
         currentMatchHistory = data.matches || [];
+        currentMatchId = currentMatchHistory[0]?.matchId || null;
 
         currentPage = "home";
         renderApp({ matchHistory: currentMatchHistory });

@@ -1,5 +1,7 @@
 // UI component for displaying a list of champions
 
+const ROLES = ["All", "Assassin", "Fighter", "Mage", "Marksman", "Support", "Tank"];
+
 export function createChampionsView(champions = []) {
   const container = document.createElement("div");
   container.className = "champions-view";
@@ -9,6 +11,39 @@ export function createChampionsView(champions = []) {
   title.textContent = "Champions";
   container.appendChild(title);
 
+  // --- Filter bar ---
+  const filterBar = document.createElement("div");
+  filterBar.className = "champion-filter-bar";
+
+  const searchInput = document.createElement("input");
+  searchInput.type = "search";
+  searchInput.placeholder = "Search by name…";
+  searchInput.className = "champion-filter-search";
+
+  const searchLabel = document.createElement("label");
+  searchLabel.textContent = "Name: ";
+  searchLabel.appendChild(searchInput);
+
+  const roleSelect = document.createElement("select");
+  roleSelect.className = "champion-filter-role";
+  ROLES.forEach((role) => {
+    const option = document.createElement("option");
+    option.value = role;
+    option.textContent = role;
+    roleSelect.appendChild(option);
+  });
+
+  const roleLabel = document.createElement("label");
+  roleLabel.textContent = "Role: ";
+  roleLabel.appendChild(roleSelect);
+
+  const countLabel = document.createElement("span");
+  countLabel.className = "champion-filter-count";
+
+  filterBar.append(searchLabel, roleLabel, countLabel);
+  container.appendChild(filterBar);
+
+  // --- Grid ---
   const grid = document.createElement("div");
   grid.id = "champion-cards";
 
@@ -111,5 +146,30 @@ export function createChampionsView(champions = []) {
   });
 
   container.appendChild(grid);
+
+  // --- Filter logic ---
+  const allCards = Array.from(grid.children);
+
+  function applyFilters() {
+    const query = searchInput.value.trim().toLowerCase();
+    const role = roleSelect.value;
+
+    let visible = 0;
+    champions.forEach((champion, index) => {
+      const card = allCards[index];
+      const nameMatch = !query || champion.name.toLowerCase().includes(query);
+      const roleMatch = role === "All" || (champion.tags || []).includes(role);
+      const show = nameMatch && roleMatch;
+      card.style.display = show ? "" : "none";
+      if (show) visible++;
+    });
+
+    countLabel.textContent = `${visible} champion${visible !== 1 ? "s" : ""}`;
+  }
+
+  searchInput.addEventListener("input", applyFilters);
+  roleSelect.addEventListener("change", applyFilters);
+  applyFilters();
+
   return container;
 }

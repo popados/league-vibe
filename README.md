@@ -21,6 +21,68 @@ This site searches for a player and displays their most recent matches. When cli
 
 ***
 
+## Debug Field
+
+Use the debug object from the champion-stats API response as a health check for your data pipeline.
+
+Call the endpoint
+
+```bash
+GET /api/summoner/:region/:gameName/:tagLine/champion-stats
+Example:
+```
+
+```bash
+curl "http://localhost:3001/api/summoner/na1/YourGameName/YourTag/champion-stats"
+```
+Look at these top-level debug fields first
+- `debug.matchedDocuments`: total match docs found in matchDetails for this puuid
+- `debug.matchedParticipants`: docs where summoner participant was actually found
+- `debug.missingParticipants`: docs where participant lookup failed
+Quick rule:
+
+If matchedDocuments > 0 and matchedParticipants = 0, your participant path/data shape is wrong for those docs.
+Validate champion ID coverage
+- debug.matchesWithChampionId
+- debug.matchesMissingChampionId
+- debug.matchIdsWithChampionId
+- debug.matchIdsMissingChampionId
+
+Quick rule:
+
+If matchesMissingChampionId > 0, inspect those match IDs first.
+Drill into per-match records
+
+Each item in debug.matches has:
+- matchId
+- puuid
+- championId
+- championName
+- hasParticipant
+- hasChampionId
+
+Use this to answer:
+
+“Did this match include the summoner?” → hasParticipant
+“Was champion resolved?” → hasChampionId
+“Which champ was linked?” → championId, championName
+
+Cross-check champion stats consistency
+
+Sum of all games across championStats should match debug.matchedParticipants.
+
+If not, some extracted participant rows are malformed or filtered out.
+Fast troubleshooting patterns
+
+missingParticipants > 0 and missingParticipantMatchIds populated:
+those docs likely use a different participant layout or corrupted payload
+
+hasParticipant = true but hasChampionId = false:
+participant exists but missing championId in saved match detail
+
+matchIdsMissingChampionId empty but UI still says no picks:
+frontend rendering/filtering issue, not backend extraction
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -195,12 +257,28 @@ TODO:
 ### 003 | 3/17/2026 - Tuesday | Environment Setup Complete
 
 Checklist:
-- Database connected
-- API POST GET methods
-- Schema
+- Database connected [x]
+- API POST GET methods [x]
+- Schema [x]
 - Validation
-- Count selection for match history
-- Check database for duplicates
+- Count selection for match history [x]
+- Check database for duplicates [x]
+
+***
+
+### 004 | 3/22/2026 - Sunday | Styling and Tweaks
+
+Styling:
+- Champion Stats [x]
+  - Add option for all champions in database
+  - Color bars to represent win/loss
+- Map View 
+  - Position/Team Zone
+- Match History
+  - Duration
+  - Date
+  - Wider card?
+  - Select a title
 
 ***
 
