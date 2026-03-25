@@ -28,6 +28,7 @@ const MONGODB_URI = process.env.MONGODB_URI;
 const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || 'matchHistories';
 const MONGODB_MATCH_HISTORY_COLLECTION = process.env.MONGODB_MATCH_HISTORY_COLLECTION || 'matchHistories';
 const MONGODB_MATCH_DETAILS_COLLECTION = process.env.MONGODB_MATCH_DETAILS_COLLECTION || 'matchDetails';
+const MONGODB_TIMELINE_COLLECTION = process.env.MONGODB_TIMELINE_COLLECTION || 'matchTimelines';
 const SUMMONERS_RIFT_MAX_COORDINATE = 14870;
 
 let mongoClientPromise = null;
@@ -110,6 +111,35 @@ async function getMatchDetailsCollection() {
   return client.db(MONGODB_DB_NAME).collection(MONGODB_MATCH_DETAILS_COLLECTION);
 }
 
+async function getTimelineCollection() {
+  const client = await getMongoClient();
+  return client.db(MONGODB_DB_NAME).collection(MONGODB_TIMELINE_COLLECTION);
+}
+
+async function countTotalDeathsInTimeline(matchId = null) {
+  const collection = await getTimelineCollection();
+  const filter = matchId ? { matchId } : {};
+
+  const pipeline = [
+    { $match: filter },
+    { $unwind: '$frames' },
+    {
+      $project: {
+        deathCount: { $size: { $ifNull: ['$frames.events', []] } }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalDeaths: { $sum: '$deathCount' }
+      }
+    }
+  ];
+
+  const [result] = await collection.aggregate(pipeline).toArray();
+  return result?.totalDeaths ?? 0;
+}
+
 async function fetchRiotAccount(region, gameName, tagLine) {
   if (!RIOT_API_KEY || RIOT_API_KEY === 'YOUR_API_KEY_HERE') {
     throw createHttpError(
@@ -165,11 +195,30 @@ async function fetchRiotAccount(region, gameName, tagLine) {
   };
 }
 
-async function fetchSummonerMatchHistory(region, gameName, tagLine, count = 10) {
+async function fetchMatchHistoryByPuuid(routing, puuid, count = 10) {
+  if (!RIOT_API_KEY || RIOT_API_KEY === 'YOUR_API_KEY_HERE') {
+    throw createHttpError(
+      500,
+      'Riot API key not configured',
+      'Please set the RIOT_API_KEY environment variable'
+    );
+  }
+
+  const normalizedRouting = String(routing || '').toLowerCase();
+  if (!['americas', 'asia', 'europe'].includes(normalizedRouting)) {
+    throw createHttpError(
+      400,
+      'Invalid routing region',
+      'Supported routing regions: americas, asia, europe'
+    );
+  }
+
+  if (!puuid) {
+    throw createHttpError(400, 'Missing puuid', 'A valid puuid is required');
+  }
+
   const normalizedCount = normalizeMatchCount(count);
-  const { routing, accountData } = await fetchRiotAccount(region, gameName, tagLine);
-  const puuid = accountData.puuid;
-  const matchlistUrl = `https://${routing}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?start=0&count=${normalizedCount}`;
+  const matchlistUrl = `https://${normalizedRouting}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?start=0&count=${normalizedCount}`;
 
   const matchlistResponse = await fetch(matchlistUrl, {
     headers: {
@@ -189,7 +238,7 @@ async function fetchSummonerMatchHistory(region, gameName, tagLine, count = 10) 
   const matchResults = await Promise.all(
     matchIds.map(async (matchId) => {
       try {
-        const matchUrl = `https://${routing}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
+        const matchUrl = `https://${normalizedRouting}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
         const matchResponse = await fetch(matchUrl, {
           headers: {
             'X-Riot-Token': RIOT_API_KEY
@@ -252,7 +301,14 @@ async function fetchSummonerMatchHistory(region, gameName, tagLine, count = 10) 
       }
     })
   );
-  const matches = matchResults.filter(Boolean);
+
+  return matchResults.filter(Boolean);
+}
+
+async function fetchSummonerMatchHistory(region, gameName, tagLine, count = 10) {
+  const { routing, accountData } = await fetchRiotAccount(region, gameName, tagLine);
+  const puuid = accountData.puuid;
+  const matches = await fetchMatchHistoryByPuuid(routing, puuid, count);
 
   return {
     summoner: {
@@ -496,6 +552,10 @@ async function fetchInitialFramePlayerPositions(matchId, region = 'americas') {
 //   const selectedFrames = timelineFrames.slice(0, 2);
   const allParticipants = matchDetail.info.teams.flatMap((team) => team.participants);
 
+  const participantById = Object.fromEntries(
+    allParticipants.map((p) => [String(p.participantId), p])
+  );
+
   const frames = selectedFrames.map((frame, index) => {
     const participantFrames = frame?.participantFrames || {};
     const participants = allParticipants
@@ -517,11 +577,46 @@ async function fetchInitialFramePlayerPositions(matchId, region = 'americas') {
       })
       .filter((participant) => participant.mapPosition);
 
+    const rawEvents = frame?.events || [];
+    const deathEvents = rawEvents
+      .filter((event) => event.type === 'CHAMPION_KILL')
+      .map((event) => {
+        const victim = participantById[String(event.victimId)] || null;
+        const killer = participantById[String(event.killerId)] || null;
+        const assistIds = Array.isArray(event.assistingParticipantIds)
+          ? event.assistingParticipantIds
+          : [];
+        const assists = assistIds
+          .map((id) => {
+            const p = participantById[String(id)];
+            return p ? { participantId: p.participantId, championName: p.championName, teamId: p.teamId } : null;
+          })
+          .filter(Boolean);
+
+        const rawPosition = event.position || null;
+        const mapPosition = mapPositionToPercent(rawPosition);
+
+        return {
+          type: 'CHAMPION_KILL',
+          timestamp: event.timestamp ?? null,
+          position: rawPosition,
+          mapPosition,
+          victimId: event.victimId ?? null,
+          victimChampion: victim?.championName ?? null,
+          victimTeamId: victim?.teamId ?? null,
+          killerId: event.killerId ?? null,
+          killerChampion: killer?.championName ?? null,
+          killerTeamId: killer?.teamId ?? null,
+          assists
+        };
+      });
+
     return {
       frameIndex: index,
       frameNumber: index + 1,
       timestamp: frame?.timestamp ?? null,
-      participants
+      participants,
+      events: deathEvents
     };
   });
 
@@ -607,11 +702,12 @@ app.get('/api/champions/selection-rate', async (req, res) => {
   try {
     const detailsCollection = await getMatchDetailsCollection();
     const matchDocs = await detailsCollection
-      .find({}, { projection: { matchId: 1, 'matchDetail.info.teams.participants.championName': 1, 'matchDetail.info.participants.championName': 1 } })
+      .find({}, { projection: { matchId: 1, 'matchDetail.info.teams.participants.championName': 1, 'matchDetail.info.teams.participants.win': 1, 'matchDetail.info.participants.championName': 1, 'matchDetail.info.participants.win': 1 } })
       .toArray();
 
     const totalGames = matchDocs.length;
     const selectedCounts = {};
+    const winCounts = {};
 
     matchDocs.forEach((doc) => {
       const teamParticipants = (doc.matchDetail?.info?.teams || []).flatMap((team) => team.participants || []);
@@ -625,6 +721,7 @@ app.get('/api/champions/selection-rate', async (req, res) => {
         }
 
         selectedCounts[championName] = (selectedCounts[championName] || 0) + 1;
+        winCounts[championName] = (winCounts[championName] || 0) + (participant?.win ? 1 : 0);
       });
     });
 
@@ -634,20 +731,29 @@ app.get('/api/champions/selection-rate', async (req, res) => {
     }
 
     const championData = await championResponse.json();
-    const allChampionNames = Object.values(championData.data).map((champion) => champion.name);
+    const allChampions = Object.values(championData.data);
 
-    const champions = allChampionNames
-      .map((championName) => {
+    const champions = allChampions
+      .map((champion) => {
+        const championName = champion.name;
         const selected = selectedCounts[championName] || 0;
+        const wins = winCounts[championName] || 0;
         const selectionRate = totalGames > 0 ? selected / totalGames : 0;
+        const winRate = selected > 0 ? wins / selected : 0;
 
         return {
           championName,
+          championId: champion.id,
+          image: `${RIOT_DDRAGON_BASE}/cdn/${CURRENT_PATCH}/img/champion/${champion.image.full}`,
           selected,
+          wins,
           total: totalGames,
           selectionRate,
+          winRate,
           selectionRatePercent: Number((selectionRate * 100).toFixed(2)),
-          selectionRateLabel: `${selected}/${totalGames}`
+          winRatePercent: Number((winRate * 100).toFixed(2)),
+          selectionRateLabel: `${selected}/${totalGames}`,
+          winRateLabel: `${wins}/${selected}`
         };
       })
       .sort((left, right) => right.selectionRate - left.selectionRate || left.championName.localeCompare(right.championName));
@@ -1216,6 +1322,82 @@ app.get('/api/summoner/:gameName/:tagLine/matches/:matchId/timeline', async (req
   }
 });
 
+// Endpoint to save timeline data to MongoDB
+app.post('/api/summoner/:gameName/:tagLine/matches/:matchId/timeline/save', async (req, res) => {
+  try {
+    const { gameName, tagLine, matchId } = req.params;
+    const { region = 'americas' } = req.query;
+    const collection = await getTimelineCollection();
+    const now = new Date();
+
+    const timelineData = req.body.timeline || await fetchInitialFramePlayerPositions(matchId, region);
+
+    const filter = { matchId, region: region.toLowerCase() };
+
+    const existingDocument = await collection.findOne(filter, { projection: { _id: 1 } });
+
+    if (existingDocument && !req.body.timeline) {
+      const [totalDeaths, totalDocuments] = await Promise.all([
+        countTotalDeathsInTimeline(matchId),
+        collection.countDocuments({})
+      ]);
+      return res.status(200).json({
+        message: 'Timeline already exists in MongoDB — skipped',
+        documentId: existingDocument._id,
+        matchId,
+        region: region.toLowerCase(),
+        skipped: true,
+        totalDeaths,
+        totalDocuments,
+        savedAt: now.toISOString()
+      });
+    }
+
+    const documentToSave = {
+      matchId,
+      region: region.toLowerCase(),
+      gameName,
+      tagLine,
+      riotId: `${gameName}#${tagLine}`,
+      frames: timelineData.frames,
+      firstFrameTimestamp: timelineData.firstFrameTimestamp ?? null,
+      updatedAt: now
+    };
+
+    await collection.updateOne(
+      filter,
+      {
+        $set: documentToSave,
+        $setOnInsert: { createdAt: now }
+      },
+      { upsert: true }
+    );
+
+    const savedDocument = await collection.findOne(filter, { projection: { _id: 1 } });
+    const [totalDeaths, totalDocuments] = await Promise.all([
+      countTotalDeathsInTimeline(matchId),
+      collection.countDocuments({})
+    ]);
+
+    res.status(existingDocument ? 200 : 201).json({
+      message: existingDocument ? 'Timeline updated in MongoDB' : 'Timeline saved to MongoDB',
+      documentId: savedDocument?._id || null,
+      matchId,
+      region: region.toLowerCase(),
+      skipped: false,
+      totalDeaths,
+      totalDocuments,
+      savedAt: now.toISOString()
+    });
+  } catch (error) {
+    console.error('Error saving timeline:', error);
+    res.status(error.status || 500).json({
+      error: error.error || 'Failed to save timeline',
+      details: error.details || error.message
+    });
+  }
+});
+
 // Endpoint to save match details JSON to MongoDB
 app.post('/api/summoner/:gameName/:tagLine/matches/:matchId/save', async (req, res) => {
   try {
@@ -1295,6 +1477,284 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Batch backfill: read every puuid from match details and save match history documents
+app.post('/api/match-details/sync-match-histories', async (req, res) => {
+  try {
+    const requestedCount = req.body.count ?? req.query.count ?? 10;
+    const maxPuuidsRaw = req.body.maxPuuids ?? req.query.maxPuuids ?? null;
+    const maxPuuids = maxPuuidsRaw === null ? null : Math.max(1, Number.parseInt(maxPuuidsRaw, 10) || 1);
+    const normalizedCount = normalizeMatchCount(requestedCount);
+
+    const detailsCollection = await getMatchDetailsCollection();
+    const historyCollection = await getMatchHistoryCollection();
+    const now = new Date();
+
+    const puuidAggregation = [
+      {
+        $project: {
+          region: { $ifNull: ['$region', 'americas'] },
+          participants: {
+            $cond: [
+              {
+                $gt: [
+                  { $size: { $ifNull: ['$matchDetail.info.participants', []] } },
+                  0
+                ]
+              },
+              { $ifNull: ['$matchDetail.info.participants', []] },
+              {
+                $reduce: {
+                  input: { $ifNull: ['$matchDetail.info.teams', []] },
+                  initialValue: [],
+                  in: {
+                    $concatArrays: ['$$value', { $ifNull: ['$$this.participants', []] }]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      { $unwind: '$participants' },
+      {
+        $match: {
+          'participants.puuid': { $type: 'string', $ne: '' }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            puuid: '$participants.puuid',
+            region: '$region'
+          },
+          gameName: { $first: '$participants.riotIdGameName' },
+          tagLine: { $first: '$participants.riotIdTagline' }
+        }
+      }
+    ];
+
+    if (maxPuuids !== null) {
+      puuidAggregation.push({ $limit: maxPuuids });
+    }
+
+    const puuidRows = await detailsCollection.aggregate(puuidAggregation).toArray();
+
+    if (puuidRows.length === 0) {
+      return res.status(200).json({
+        message: 'No puuids found in matchDetails collection',
+        scannedPuuids: 0,
+        saved: 0,
+        updated: 0,
+        failed: 0,
+        skipped: 0,
+        errors: []
+      });
+    }
+
+    const summary = {
+      scannedPuuids: puuidRows.length,
+      saved: 0,
+      updated: 0,
+      skipped: 0,
+      failed: 0,
+      errors: []
+    };
+
+    let processedCount = 0;
+
+    // Set up interval to report progress every 1 second
+    const progressInterval = setInterval(() => {
+      res.write(`data: ${JSON.stringify({
+        status: 'processing',
+        timestamp: new Date().toISOString(),
+        processingProgress: {
+          documentsPuuidsProcessed: processedCount,
+          totalPuuidsToProcess: puuidRows.length,
+          saved: summary.saved,
+          updated: summary.updated,
+          skipped: summary.skipped,
+          failed: summary.failed
+        }
+      })}\n\n`);
+    }, 1000);
+
+    // Set response headers for streaming/SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    for (const row of puuidRows) {
+      const puuid = row?._id?.puuid;
+      const routingRegion = String(row?._id?.region || 'americas').toLowerCase();
+      const gameName = row?.gameName || 'Unknown';
+      const tagLine = row?.tagLine || 'Unknown';
+
+      if (!['americas', 'asia', 'europe'].includes(routingRegion)) {
+        summary.failed += 1;
+        summary.errors.push({ puuid, region: routingRegion, error: 'Unsupported routing region' });
+        processedCount += 1;
+        continue;
+      }
+
+      try {
+        const matches = await fetchMatchHistoryByPuuid(routingRegion, puuid, normalizedCount);
+
+        if (!Array.isArray(matches) || matches.length === 0) {
+          summary.skipped += 1;
+          processedCount += 1;
+          continue;
+        }
+
+        // Construct the matchHistory object in the same format as fetchSummonerMatchHistory
+        const matchHistory = {
+          summoner: {
+            name: gameName,
+            riotId: `${gameName}#${tagLine}`,
+            gameName,
+            tagLine,
+            puuid,
+            region: routingRegion.toUpperCase()
+          },
+          matches
+        };
+
+        const documentToSave = {
+          region: matchHistory.summoner.region,
+          gameName: matchHistory.summoner.gameName,
+          tagLine: matchHistory.summoner.tagLine,
+          riotId: matchHistory.summoner.riotId,
+          puuid: matchHistory.summoner.puuid,
+          matchCount: Array.isArray(matchHistory.matches) ? matchHistory.matches.length : 0,
+          requestedCount: normalizedCount,
+          matchHistory,
+          updatedAt: now
+        };
+
+        const filter = {
+          region: matchHistory.summoner.region,
+          puuid: matchHistory.summoner.puuid
+        };
+
+        const existingDocument = await historyCollection.findOne(filter, {
+          projection: { _id: 1 }
+        });
+
+        await historyCollection.updateOne(
+          filter,
+          {
+            $set: documentToSave,
+            $setOnInsert: {
+              createdAt: now
+            }
+          },
+          {
+            upsert: true
+          }
+        );
+
+        if (existingDocument) {
+          summary.updated += 1;
+        } else {
+          summary.saved += 1;
+        }
+      } catch (error) {
+        summary.failed += 1;
+        summary.errors.push({
+          puuid,
+          region: routingRegion,
+          error: error.details || error.message || 'Failed to sync puuid'
+        });
+      }
+
+      processedCount += 1;
+    }
+
+    // Clear the progress interval
+    clearInterval(progressInterval);
+
+    // Send final completion message
+    res.write(`data: ${JSON.stringify({
+      status: 'completed',
+      message: 'PUUID sync from matchDetails to matchHistories completed',
+      requestedCount: normalizedCount,
+      timestamp: new Date().toISOString(),
+      ...summary
+    })}\n\n`);
+    res.end();
+  } catch (error) {
+    console.error('Error syncing match histories from match details:', error);
+    res.status(error.status || 500).json({
+      error: error.error || 'Failed to sync match histories from match details',
+      details: error.details || error.message
+    });
+  }
+});
+
+// Cleanup route: remove match history docs with unknown gameName
+app.delete('/api/match-histories/cleanup-unknown-gamename', async (req, res) => {
+  try {
+    const collection = await getMatchHistoryCollection();
+    const filter = {
+      $or: [
+        { gameName: { $regex: '^unknown$', $options: 'i' } },
+        { 'matchHistory.summoner.gameName': { $regex: '^unknown$', $options: 'i' } }
+      ]
+    };
+
+    const result = await collection.deleteMany(filter);
+    const remaining = await collection.countDocuments({});
+
+    res.status(200).json({
+      message: `'Unknown' gameName documents removed: ${result.deletedCount || 0} from matchHistories`,
+      deletedCount: result.deletedCount || 0,
+      remainingDocuments: remaining
+    });
+  } catch (error) {
+    console.error('Error cleaning unknown gameName documents:', error);
+    res.status(error.status || 500).json({
+      error: error.error || 'Failed to clean unknown gameName documents',
+      details: error.details || error.message
+    });
+  }
+});
+
+// Aggregated CHAMPION_KILL events across all saved timelines
+app.get('/api/heatmap/kill-events', async (req, res) => {
+  try {
+    const collection = await getTimelineCollection();
+
+    const pipeline = [
+      { $unwind: '$frames' },
+      { $unwind: '$frames.events' },
+      { $match: { 'frames.events.type': 'CHAMPION_KILL' } },
+      {
+        $project: {
+          _id: 0,
+          matchId: 1,
+          position: '$frames.events.position',
+          mapPosition: '$frames.events.mapPosition',
+          victimChampion: '$frames.events.victimChampion',
+          victimTeamId: '$frames.events.victimTeamId',
+          killerChampion: '$frames.events.killerChampion',
+          killerTeamId: '$frames.events.killerTeamId',
+          timestamp: '$frames.events.timestamp'
+        }
+      }
+    ];
+
+    const events = await collection.aggregate(pipeline).toArray();
+    const matchCount = await collection.countDocuments({});
+
+    res.json({ events, total: events.length, matchCount });
+  } catch (error) {
+    console.error('Error fetching heatmap kill events:', error);
+    res.status(error.status || 500).json({
+      error: error.error || 'Failed to fetch kill events',
+      details: error.details || error.message
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 League Vibe server running on http://localhost:${PORT}`);
   console.log(`📚 Champions API available at http://localhost:${PORT}/api/champions`);
@@ -1303,8 +1763,13 @@ app.listen(PORT, () => {
   console.log(`📊 Match History API available at http://localhost:${PORT}/api/summoner/:region/:gameName/:tagLine/matches`);
   console.log(`💾 Match History Save API available at http://localhost:${PORT}/api/summoner/:region/:gameName/:tagLine/matches/save`);
   console.log(`🗂️ Match Details Batch Save API available at http://localhost:${PORT}/api/summoner/:region/:gameName/:tagLine/matches/save-details`);
+  console.log(`🔁 Match History Sync API available at http://localhost:${PORT}/api/match-details/sync-match-histories`);
   console.log(`🎯 Match Details API available at http://localhost:${PORT}/api/summoner/:region/:gameName/:tagLine/matches/:matchId`);
   console.log(`🧾 Match Details Save API available at http://localhost:${PORT}/api/summoner/:gameName/:tagLine/matches/:matchId/save`);
+  console.log(`🧹 Match History Cleanup API available at http://localhost:${PORT}/api/match-histories/cleanup-unknown-gamename`);
+  console.log(`📈 Heatmap Kill Events API available at http://localhost:${PORT}/api/heatmap/kill-events`);
+  console.log(`🔐 Match Details Sync API available at http://localhost:${PORT}/api/match-details/sync-match-histories`);
+  console.log('⚠️  use curl or Postman to test POST endpoints with JSON bodies');
 
   if (!RIOT_API_KEY || RIOT_API_KEY === 'YOUR_API_KEY_HERE') {
     console.warn('⚠️  WARNING: Riot API key not configured. Summoner and match APIs will not work.');

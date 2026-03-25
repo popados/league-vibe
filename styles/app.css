@@ -307,8 +307,8 @@ a {
 
 /* Champion Cards Styles */
 .page-title {
-    font-size: 2.2em;
-    margin-bottom: 40px;
+    font-size: 1.8em;
+    margin-bottom: 30px;
     text-align: center;
     background: linear-gradient(45deg, var(--link-color), var(--main-color));
     -webkit-background-clip: text;
@@ -664,7 +664,7 @@ a {
 
 /* Items View Styles */
 .items-view {
-    padding: 20px;
+    /* padding: 20px; */
     max-width: 1400px;
     margin: 0 auto;
 }
@@ -748,7 +748,7 @@ a {
 .items-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 20px;
+    gap: 45px;
     margin-top: 20px;
 }
 
@@ -765,7 +765,7 @@ a {
 
 .item-item:hover {
     transform: translateY(-5px);
-    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(240, 177, 41, 0.2);
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.9), 0 0 30px rgba(240, 177, 41, 0.3);
 }
 
 .item-image {
@@ -831,7 +831,7 @@ a {
 @media (min-width: 1200px) {
     .items-list {
         grid-template-columns: repeat(4, 1fr);
-        gap: 25px;
+        gap: 45px;
     }
 }
 
@@ -1428,6 +1428,27 @@ a {
     inset: 0;
 }
 
+.heatmap-overlay {
+    pointer-events: none;
+}
+
+.heatmap-cell {
+    position: absolute;
+    box-sizing: border-box;
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    opacity: 0.7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.heatmap-cell-label {
+    font-size: 0.62em;
+    font-weight: 700;
+    color: #111;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.35);
+}
+
 .map-player-marker {
     position: absolute;
     transform: translate(-50%, -50%);
@@ -1557,7 +1578,7 @@ a {
 
 /* Match Detail View Styles */
 .match-detail-view {
-    margin-top: 30px;
+    margin-top: 24px;
     padding: 20px;
     background: linear-gradient(145deg, var(--nav-bg-color), var(--secondary-color));
     border-radius: 15px;
@@ -1568,11 +1589,11 @@ a {
 .tc-container {
     margin-top: 24px;
     padding: 20px;
-    border-radius: 12px;
-    background: rgba(0, 0, 0, 0.26);
-    border: 1px solid rgba(240, 177, 41, 0.18);
+    background: linear-gradient(145deg, var(--nav-bg-color), var(--secondary-color));
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(240, 177, 41, 0.2);
 }
-
 .tc-title {
     margin: 0 0 8px;
 }
@@ -1604,10 +1625,38 @@ a {
 }
 
 .tc-item {
-    padding: 8px 10px;
+    padding: 10px;
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.03);
     color: var(--main-color);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid rgba(240, 177, 41, 0.12);
+}
+
+.tc-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: 0 0 auto;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.tc-item-body {
+    min-width: 0;
+}
+
+.tc-champion-name {
+    margin: 0 0 4px;
+    font-size: 0.98em;
+}
+
+.tc-stat {
+    margin: 0;
+    font-size: 0.84em;
+    color: var(--last-color);
 }
 
 @media (max-width: 1100px) {
@@ -1624,7 +1673,7 @@ a {
 
 .match-detail-view h2 {
     text-align: center;
-    margin-bottom: 20px;
+    margin-bottom: 8px;
     background: linear-gradient(45deg, var(--link-color), var(--main-color));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -1634,11 +1683,9 @@ a {
 
 .match-detail-summoner {
     text-align: center;
-    margin-top: -8px;
-    margin-bottom: 18px;
     color: var(--last-color);
-    font-size: 0.98em;
-    font-weight: 600;
+    font-size: 0.95em;
+    margin-bottom: 20px;
 }
 
 .loading {

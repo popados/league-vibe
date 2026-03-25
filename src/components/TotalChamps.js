@@ -6,7 +6,6 @@ export function createTotalChampsView() {
 
 	const title = document.createElement("h2");
 	title.className = "tc-title";
-	title.classList.add("page-title");
 	title.textContent = "Champion Selection Rate";
 	container.appendChild(title);
 
@@ -35,11 +34,7 @@ export function createTotalChampsView() {
 	optionAlphabetical.value = "alphabetical";
 	optionAlphabetical.textContent = "Alphabetical";
 
-	const optionWinRate = document.createElement("option");
-	optionWinRate.value = "win-rate";
-	optionWinRate.textContent = "Win Rate";
-
-	sortSelect.append(optionSelectionRate, optionAlphabetical, optionWinRate);
+	sortSelect.append(optionSelectionRate, optionAlphabetical);
 	controls.append(sortLabel, sortSelect);
 	container.appendChild(controls);
 
@@ -61,12 +56,6 @@ export function createTotalChampsView() {
 		const sorted = [...championData].sort((left, right) => {
 			if (currentSort === "alphabetical") {
 				return left.championName.localeCompare(right.championName);
-			}
-
-			if (currentSort === "win-rate") {
-				return (right.winRate ?? 0) - (left.winRate ?? 0)
-					|| (right.wins ?? 0) - (left.wins ?? 0)
-					|| left.championName.localeCompare(right.championName);
 			}
 
 			return (right.selectionRate ?? 0) - (left.selectionRate ?? 0)

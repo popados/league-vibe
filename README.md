@@ -234,7 +234,7 @@ The server fetches the same match-history JSON exposed by the GET endpoint and u
 
 ***
 
-### 002 | 3/16/2026 | Monday - Environment Setup Complete
+### 002 | 3/16/2026 - Monday | API Endpoint Creation
 
 Finished:
 - Added styling
@@ -254,7 +254,7 @@ TODO:
 
 ***
 
-### 003 | 3/17/2026 - Tuesday | Environment Setup Complete
+### 003 | 3/17/2026 - Tuesday | Match History and Map View
 
 Checklist:
 - Database connected [x]
@@ -273,12 +273,60 @@ Styling:
   - Add option for all champions in database
   - Color bars to represent win/loss
 - Map View 
-  - Position/Team Zone
+  - Position/Team Zone 
 - Match History
-  - Duration
-  - Date
+  - Duration [x]
+  - Date [x]
   - Wider card?
   - Select a title
+
+***
+
+### 005 | 3/24/2026 - Tuesday | Heat Map and Styling
+
+TODO:
+- Batch save for matches
+  - Search all summoners in a game
+    - List Matches
+    - Save Matches
+  - Schema Format
+- Aggregate data for heatmap
+  - Save timeline data
+    - look for death events
+      - Map them
+- Styling
+  - All pages are similar
+  - Refactor
+- API
+  - Refactor
+    - Seperate function files
+    - API endpoints files
+    - Validate
+
+**Constants & helpers**
+
+`MONGODB_TIMELINE_COLLECTION` env var (defaults to matchTimelines)
+
+`getTimelineCollection() `— returns the Mongo collection handle, same pattern as the other getters
+
+`countTotalDeathsInTimeline(matchId?)` — aggregation pipeline that unwinds all frames, counts the events array on each (which only contains `CHAMPION_KILL` events), and sums them. Pass a matchId to scope to one match, or omit for the full collection total.
+
+**POST route —**
+
+```bash
+POST /api/summoner/:gameName/:tagLine/matches/:matchId/timeline/save
+```
+Accepts an optional `{ timeline }` body; if omitted, fetches live from Riot via `fetchInitialFramePlayerPositions`
+
+Upserts the document (keyed on matchId + region) with all frames including events
+
+Returns `totalDeaths` (scoped to that matchId) in every response, including when the save is skipped because the document already exists
+
+***
+
+Batch save data from the server using the match history provided and pulling timeline data??
+
+search every puuid from the match details collection and saves the match history list to the match history collection
 
 ***
 

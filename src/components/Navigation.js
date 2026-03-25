@@ -11,12 +11,13 @@ export function createNavigation(onNavigate, currentPage = "home") {
       { id: "champion-stats", label: "Champion Stats" },
       { id: "match-details", label: "Match Details" },
       { id: "map-summoners-rift", label: "Map View" },
+      { id: "heat-map-rift", label: "Heat Map View" },
     ],
     [
-        { id: "champions", label: "Champions" },
-        { id: "champions-selected", label: "Total Selected" },
-        { id: "items", label: "Items" },
-        { id: "summoner-profile", label: "Summoner Profile" },
+      { id: "champions-selected", label: "Win/Pick Rate" },
+      { id: "items", label: "Items" },
+      { id: "champions", label: "Champions" },
+      { id: "summoner-profile", label: "Summoner Profile" },
     ],
   ];
 

@@ -47,7 +47,8 @@ export function createMatchHistoryView(
   summoner = null,
   onNavigateToMatchDetail = null,
   onSaveMatchHistory = null,
-  onSaveAllMatchDetails = null
+  onSaveAllMatchDetails = null,
+  onSaveAllTimelines = null
 ) {
   const container = document.createElement("div");
   container.className = "match-history";
@@ -125,7 +126,7 @@ export function createMatchHistoryView(
 
   container.appendChild(list);
 
-  if (summoner && (typeof onSaveMatchHistory === "function" || typeof onSaveAllMatchDetails === "function")) {
+  if (summoner && (typeof onSaveMatchHistory === "function" || typeof onSaveAllMatchDetails === "function" || typeof onSaveAllTimelines === "function")) {
     const actions = document.createElement("div");
     actions.className = "match-history-actions";
 
@@ -185,6 +186,32 @@ export function createMatchHistoryView(
       });
 
       buttonRow.appendChild(saveDetailsButton);
+    }
+
+    if (typeof onSaveAllTimelines === "function") {
+      const saveTimelinesButton = document.createElement("button");
+      saveTimelinesButton.type = "button";
+      saveTimelinesButton.className = "save-history-button save-all-timelines-button";
+      saveTimelinesButton.textContent = "Save All Timelines";
+
+      saveTimelinesButton.addEventListener("click", async () => {
+        saveTimelinesButton.disabled = true;
+        status.textContent = "Saving all timelines in sequence...";
+        status.className = "save-history-status pending";
+
+        try {
+          const result = await onSaveAllTimelines({ summoner, matches });
+          status.textContent = result?.message || "All timelines saved.";
+          status.className = "save-history-status success";
+        } catch (error) {
+          status.textContent = error.message || "Failed to save all timelines.";
+          status.className = "save-history-status error";
+        } finally {
+          saveTimelinesButton.disabled = false;
+        }
+      });
+
+      buttonRow.appendChild(saveTimelinesButton);
     }
 
     actions.append(buttonRow, status);

@@ -8,8 +8,9 @@ import { createChampionsView } from "./components/ChampionsView.js";
 import { createItemsView } from "./components/ItemsView.js";
 import { createMatchDetailView } from "./components/MatchDetailView.js";
 import { createSummonerProfileView } from "./components/SummonerProfileView.js";
-import { createMapView } from "./components/mapView.js";
+import { createHeatMapView } from "./components/HeatMapView.js";
 import { createTotalChampsView } from "./components/TotalChampsView.js";
+import { createMapView } from "./components/MapView.js";
 
 const app = document.getElementById("app");
 
@@ -118,6 +119,45 @@ async function saveAllMatchDetails({ summoner, matches }) {
   return data;
 }
 
+async function saveAllTimelines({ summoner, matches }) {
+  if (!summoner?.gameName || !summoner?.tagLine || !summoner?.region) {
+    throw new Error("Summoner information is required before saving timelines.");
+  }
+
+  const region = summoner.region.toLowerCase();
+  const routingMap = {
+    na: "americas", br: "americas", lan: "americas", las: "americas", oce: "americas",
+    euw: "europe", eune: "europe", tr: "europe", ru: "europe",
+    kr: "asia", jp: "asia"
+  };
+  const routingRegion = routingMap[region] || "americas";
+
+  const results = [];
+  for (const match of matches) {
+    if (!match?.matchId) continue;
+    const response = await fetch(
+      `http://localhost:3001/api/summoner/${encodeURIComponent(summoner.gameName)}/${encodeURIComponent(summoner.tagLine)}/matches/${encodeURIComponent(match.matchId)}/timeline/save?region=${encodeURIComponent(routingRegion)}`,
+      { method: "POST", headers: { "Content-Type": "application/json" } }
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.details || data.error || `Timeline save failed for ${match.matchId}: ${response.status}`);
+    }
+    results.push(data);
+  }
+
+  const totalDeaths = results.reduce((sum, r) => sum + (r.totalDeaths ?? 0), 0);
+  const totalDocuments = results[results.length - 1]?.totalDocuments ?? null;
+  const docInfo = totalDocuments !== null ? ` Total documents in collection: ${totalDocuments}.` : "";
+  return {
+    message: `Saved ${results.length} timeline${results.length !== 1 ? "s" : ""}. Total deaths: ${totalDeaths}.${docInfo}`,
+    savedCount: results.length,
+    totalDeaths,
+    totalDocuments,
+    results
+  };
+}
+
 function renderApp(data = {}) {
   app.innerHTML = "";
 
@@ -158,6 +198,9 @@ function renderApp(data = {}) {
       break;
     case "map-summoners-rift":
       renderMapView(fullData);
+      break;
+    case "heat-map-rift":
+      renderHeatMapView(fullData);
       break;
     default:
       renderHome(fullData);
@@ -206,13 +249,40 @@ async function renderMapView({ matchId } = {}) {
     app.removeChild(loadingDiv);
     const mapView = createMapView(data, currentMatchHistory, (selectedMatchId) => {
       currentMatchId = selectedMatchId;
-      currentPage = 'map - summoners rift';
+      currentPage = 'map-summoners-rift';
       renderApp({ matchId: selectedMatchId });
     });
     app.appendChild(mapView);
   } catch (error) {
     console.error('Failed to fetch map data from server:', error);
     loadingDiv.textContent = `Failed to load map data: ${error.message}`;
+    loadingDiv.style.color = '#f44336';
+  }
+}
+
+async function renderHeatMapView({ matchId } = {}) {
+  const search = createSummonerSearch(handleSummonerSearch, currentSummoner);
+  app.appendChild(search);
+
+  const loadingDiv = document.createElement('div');
+  loadingDiv.className = 'loading';
+  loadingDiv.textContent = 'Loading heatmap kill events...';
+  app.appendChild(loadingDiv);
+
+  try {
+    const response = await fetch('http://localhost:3001/api/heatmap/kill-events');
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.details || data.error || `Server error: ${response.status}`);
+    }
+
+    app.removeChild(loadingDiv);
+    const heatMapView = createHeatMapView(data);
+    app.appendChild(heatMapView);
+  } catch (error) {
+    console.error('Failed to fetch heatmap kill events:', error);
+    loadingDiv.textContent = `Failed to load heatmap: ${error.message}`;
     loadingDiv.style.color = '#f44336';
   }
 }
@@ -233,7 +303,8 @@ function renderHome({ matchHistory = [], championStats = {} } = {}) {
       });
     },
     saveMatchHistory,
-    saveAllMatchDetails
+    saveAllMatchDetails,
+    saveAllTimelines
   );
   const championStatsView = createChampionStatsView(championStats, currentSummoner);
 
@@ -255,7 +326,8 @@ function renderMatchHistory({ matchHistory = [], summoner } = {}) {
       });
     },
     saveMatchHistory,
-    saveAllMatchDetails
+    saveAllMatchDetails,
+    saveAllTimelines
   );
   app.appendChild(matchHistoryView);
 }
