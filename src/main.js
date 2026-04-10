@@ -408,7 +408,7 @@ function renderItems({ items = [] } = {}) {
 
 async function fetchItemsFromServer() {
   try {
-    const response = await fetch('http://localhost:3001/api/items');
+    const response = await fetch('https://ritoheatmap.info/api/items');
     if (!response.ok) {
       throw new Error(`Server error: ${response.status}`);
     }
