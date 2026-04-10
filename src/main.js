@@ -11,6 +11,7 @@ import { createSummonerProfileView } from "./components/SummonerProfileView.js";
 import { createHeatMapView } from "./components/HeatMapView.js";
 import { createTotalChampsView } from "./components/TotalChampsView.js";
 import { createMapView } from "./components/MapView.js";
+import { API_BASE_URL } from "./config/apiBaseUrl.js";
 
 const app = document.getElementById("app");
 
@@ -39,7 +40,7 @@ function mapRegionToRouting(region = "NA") {
 }
 
 async function handleSummonerSearch(gameName, tag, region, count = 10) {
-  const apiEndpoint = `http://localhost:3001/api/summoner/${region}/${gameName}/${tag}/matches?count=${count}`;
+  const apiEndpoint = `${API_BASE_URL}/api/summoner/${region}/${gameName}/${tag}/matches?count=${count}`;
   try {
     const response = await fetch(apiEndpoint);
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
@@ -62,7 +63,7 @@ async function saveMatchHistory({ summoner, matches }) {
 
   const region = summoner.region.toLowerCase();
   const response = await fetch(
-    `http://localhost:3001/api/summoner/${encodeURIComponent(region)}/${encodeURIComponent(summoner.gameName)}/${encodeURIComponent(summoner.tagLine)}/matches/save`,
+    `${API_BASE_URL}/api/summoner/${encodeURIComponent(region)}/${encodeURIComponent(summoner.gameName)}/${encodeURIComponent(summoner.tagLine)}/matches/save`,
     {
       method: "POST",
       headers: {
@@ -94,7 +95,7 @@ async function saveAllMatchDetails({ summoner, matches }) {
 
   const region = summoner.region.toLowerCase();
   const response = await fetch(
-    `http://localhost:3001/api/summoner/${encodeURIComponent(region)}/${encodeURIComponent(summoner.gameName)}/${encodeURIComponent(summoner.tagLine)}/matches/save-details`,
+    `${API_BASE_URL}/api/summoner/${encodeURIComponent(region)}/${encodeURIComponent(summoner.gameName)}/${encodeURIComponent(summoner.tagLine)}/matches/save-details`,
     {
       method: "POST",
       headers: {
@@ -136,7 +137,7 @@ async function saveAllTimelines({ summoner, matches }) {
   for (const match of matches) {
     if (!match?.matchId) continue;
     const response = await fetch(
-      `http://localhost:3001/api/summoner/${encodeURIComponent(summoner.gameName)}/${encodeURIComponent(summoner.tagLine)}/matches/${encodeURIComponent(match.matchId)}/timeline/save?region=${encodeURIComponent(routingRegion)}`,
+      `${API_BASE_URL}/api/summoner/${encodeURIComponent(summoner.gameName)}/${encodeURIComponent(summoner.tagLine)}/matches/${encodeURIComponent(match.matchId)}/timeline/save?region=${encodeURIComponent(routingRegion)}`,
       { method: "POST", headers: { "Content-Type": "application/json" } }
     );
     const data = await response.json();
@@ -238,7 +239,7 @@ async function renderMapView({ matchId } = {}) {
   try {
     const routingRegion = mapRegionToRouting(currentSummoner.region);
     const response = await fetch(
-      `http://localhost:3001/api/summoner/${encodeURIComponent(currentSummoner.gameName)}/${encodeURIComponent(currentSummoner.tagLine)}/matches/${encodeURIComponent(resolvedMatchId)}/timeline?region=${encodeURIComponent(routingRegion)}`
+      `${API_BASE_URL}/api/summoner/${encodeURIComponent(currentSummoner.gameName)}/${encodeURIComponent(currentSummoner.tagLine)}/matches/${encodeURIComponent(resolvedMatchId)}/timeline?region=${encodeURIComponent(routingRegion)}`
     );
     const data = await response.json();
 
@@ -270,7 +271,7 @@ async function renderHeatMapView({ matchId } = {}) {
   app.appendChild(loadingDiv);
 
   try {
-    const response = await fetch('http://localhost:3001/api/heatmap/kill-events');
+    const response = await fetch(`${API_BASE_URL}/api/heatmap/kill-events`);
     const data = await response.json();
 
     if (!response.ok) {
@@ -473,7 +474,7 @@ async function renderMatchDetail({ matchId, summoner } = {}) {
     async (selectedGameName, selectedTagLine) => {
       try {
         const response = await fetch(
-          `http://localhost:3001/api/summoner/${encodeURIComponent(region)}/${encodeURIComponent(selectedGameName)}/${encodeURIComponent(selectedTagLine)}/matches?count=10`
+          `${API_BASE_URL}/api/summoner/${encodeURIComponent(region)}/${encodeURIComponent(selectedGameName)}/${encodeURIComponent(selectedTagLine)}/matches?count=10`
         );
 
         if (!response.ok) {

@@ -1,5 +1,7 @@
 // UI component for displaying summoner data including match history
 
+import { API_BASE_URL } from "../config/apiBaseUrl.js";
+
 export async function createSummonerProfileView(cachedSummoner) {
   const container = document.createElement("div");
   container.className = "summoner-profile-view match-history";
@@ -20,7 +22,7 @@ export async function createSummonerProfileView(cachedSummoner) {
       throw new Error('Summoner information not available');
     }
 
-    const response = await fetch(`http://localhost:3001/api/summoner/${region}/${gameName}/${tagLine}`);
+    const response = await fetch(`${API_BASE_URL}/api/summoner/${region}/${gameName}/${tagLine}`);
     if (!response.ok) {
       throw new Error(`API Error: ${response.status}`);
     }

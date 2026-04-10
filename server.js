@@ -6,11 +6,17 @@ require('dotenv').config({ override: true });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const CLIENT_API_BASE_URL = process.env.CLIENT_API_BASE_URL || `http://localhost:${PORT}`;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.static('.')); // Serve static files from current directory
+
+app.get('/env.js', (req, res) => {
+  res.type('application/javascript');
+  res.send(`window.__LEAGUE_VIBE_API_BASE_URL__ = ${JSON.stringify(CLIENT_API_BASE_URL)};`);
+});
 
 // Riot Data Dragon API base URL
 const RIOT_DDRAGON_BASE = 'https://ddragon.leagueoflegends.com';

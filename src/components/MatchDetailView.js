@@ -1,5 +1,7 @@
 // UI component for displaying detailed match data including items
 
+import { API_BASE_URL } from "../config/apiBaseUrl.js";
+
 export async function createMatchDetailView(
   gameName,
   tag,
@@ -21,7 +23,7 @@ export async function createMatchDetailView(
 
   try {
     // Fetch match details from API
-    const response = await fetch(`http://localhost:3001/api/summoner/${gameName}/${tag}/matches/${matchId}?region=${encodeURIComponent(routingRegion)}`);
+    const response = await fetch(`${API_BASE_URL}/api/summoner/${gameName}/${tag}/matches/${matchId}?region=${encodeURIComponent(routingRegion)}`);
     if (!response.ok) {
       throw new Error(`API Error: ${response.status}`);
     }
@@ -221,7 +223,7 @@ function renderMatchDetail(
 
     try {
       const response = await fetch(
-        `http://localhost:3001/api/summoner/${encodeURIComponent(gameName)}/${encodeURIComponent(tag)}/matches/${encodeURIComponent(matchDetail.metadata.matchId)}/save?region=${encodeURIComponent(routingRegion)}`,
+        `${API_BASE_URL}/api/summoner/${encodeURIComponent(gameName)}/${encodeURIComponent(tag)}/matches/${encodeURIComponent(matchDetail.metadata.matchId)}/save?region=${encodeURIComponent(routingRegion)}`,
         {
           method: "POST",
           headers: {

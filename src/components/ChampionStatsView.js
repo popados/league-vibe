@@ -1,5 +1,7 @@
 // UI component for displaying champion statistics
 
+import { API_BASE_URL } from "../config/apiBaseUrl.js";
+
 const DDRAGON_BASE = "https://ddragon.leagueoflegends.com/cdn/16.6.1/img/champion";
 
 function formatKda(kills, deaths, assists, games) {
@@ -132,7 +134,7 @@ export function createChampionStatsView(championStats = {}, summoner = null) {
   statusEl.style.display = "block";
 
   fetch(
-    `http://localhost:3001/api/summoner/${encodeURIComponent(summoner.region.toLowerCase())}/${encodeURIComponent(summoner.gameName)}/${encodeURIComponent(summoner.tagLine)}/champion-stats`
+    `${API_BASE_URL}/api/summoner/${encodeURIComponent(summoner.region.toLowerCase())}/${encodeURIComponent(summoner.gameName)}/${encodeURIComponent(summoner.tagLine)}/champion-stats`
   )
     .then(async (response) => {
       const data = await response.json();

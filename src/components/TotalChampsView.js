@@ -1,3 +1,5 @@
+import { API_BASE_URL } from "../config/apiBaseUrl.js";
+
 export function createTotalChampsView() {
 	const container = document.createElement("div");
 	container.className = "total-champs-view tc-container";
@@ -113,7 +115,7 @@ export function createTotalChampsView() {
 		renderList();
 	});
 
-	fetch("http://localhost:3001/api/champions/selection-rate")
+	fetch(`${API_BASE_URL}/api/champions/selection-rate`)
 		.then(async (response) => {
 			const data = await response.json();
 
