@@ -1,1 +1,1 @@
-export const API_BASE_URL = ritoheatmap.info;
+export const API_BASE_URL = "https://ritoheatmap.info";
