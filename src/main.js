@@ -365,7 +365,7 @@ function renderChampions({ champions = [] } = {}) {
 
 async function fetchChampionsFromServer() {
   try {
-    const response = await fetch('http://localhost:3001/api/champions');
+    const response = await fetch('https://ritoheatmap.info/api/champions');
     if (!response.ok) {
       throw new Error(`Server error: ${response.status}`);
     }
