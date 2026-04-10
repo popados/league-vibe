@@ -2,11 +2,15 @@ const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
 const { MongoClient } = require('mongodb');
+const fs = require('fs/promises');
+const path = require('path');
 require('dotenv').config({ override: true });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const CLIENT_API_BASE_URL = process.env.CLIENT_API_BASE_URL || `http://localhost:${PORT}`;
+const CLIENT_API_BASE_URL = process.env.CLIENT_API_BASE_URL
+  || (process.env.NODE_ENV === 'production' ? 'https://ritoheatmap.info' : `http://localhost:${PORT}`);
+const HEATMAP_FALLBACK_FILE = path.join(__dirname, 'data', 'mockHeatmapKillEvents.json');
 
 // Middleware
 app.use(cors());
@@ -128,6 +132,17 @@ function getRiotRetryDelayMs(response, attempt) {
 
 function getRiotRequestMetricsSnapshot() {
   return { ...riotRequestMetrics };
+}
+
+async function loadHeatmapFallbackEvents() {
+  try {
+    const raw = await fs.readFile(HEATMAP_FALLBACK_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.events) ? parsed.events : [];
+  } catch (error) {
+    console.warn('Failed to load heatmap fallback data:', error.message);
+    return [];
+  }
 }
 
 async function riotApiRequestWithRetry(url, options = {}) {
@@ -2161,12 +2176,26 @@ app.get('/api/heatmap/kill-events', async (req, res) => {
       }
     ];
 
-    const events = await collection.aggregate(pipeline).toArray();
+    let events = await collection.aggregate(pipeline).toArray();
     const matchCount = await collection.countDocuments({});
+
+    if (events.length === 0) {
+      events = await loadHeatmapFallbackEvents();
+    }
 
     res.json({ events, total: events.length, matchCount });
   } catch (error) {
-    console.error('Error fetching heatmap kill events:', error);
+    console.error('Error fetching heatmap kill events from MongoDB:', error);
+    const fallbackEvents = await loadHeatmapFallbackEvents();
+
+    if (fallbackEvents.length > 0) {
+      return res.json({
+        events: fallbackEvents,
+        total: fallbackEvents.length,
+        matchCount: 0
+      });
+    }
+
     res.status(error.status || 500).json({
       error: error.error || 'Failed to fetch kill events',
       details: error.details || error.message

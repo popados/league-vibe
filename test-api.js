@@ -114,6 +114,29 @@ async function testMatchHistoryAPI() {
   }
 }
 
+async function testHeatmapAPI() {
+  try {
+    console.log('\n🔥 Testing heatmap kill-events API...');
+    const response = await fetch(`${BASE_URL}/api/heatmap/kill-events`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.details || data.error || `HTTP ${response.status}`);
+    }
+
+    console.log('✅ Heatmap API successful!');
+    console.log(`📊 Events returned: ${data.total ?? 0}`);
+    console.log(`🗂️ Matches scanned: ${data.matchCount ?? 0}`);
+
+    const sample = Array.isArray(data.events) ? data.events[0] : null;
+    if (sample) {
+      console.log(`🎯 Sample event: ${sample.killerChampion || 'Unknown'} -> ${sample.victimChampion || 'Unknown'}`);
+    }
+  } catch (error) {
+    console.error('❌ Heatmap API failed:', error.message);
+  }
+}
+
 async function runAllTests() {
   console.log('🧪 Testing all League Vibe API endpoints...\n');
 
@@ -122,6 +145,7 @@ async function runAllTests() {
   await testItemsAPI();
   await testSummonerAPI();
   await testMatchHistoryAPI();
+  await testHeatmapAPI();
 
   console.log('\n🎉 Testing complete!');
   console.log('\n📝 API Key Setup:');

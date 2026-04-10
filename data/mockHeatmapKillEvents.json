@@ -1,0 +1,54 @@
+{
+  "events": [
+    {
+      "matchId": "MOCK_MATCH_001",
+      "position": { "x": 3650, "y": 11200 },
+      "mapPosition": { "left": 24.55, "top": 24.68 },
+      "victimChampion": "Lux",
+      "victimTeamId": 100,
+      "killerChampion": "Zed",
+      "killerTeamId": 200,
+      "timestamp": 295000
+    },
+    {
+      "matchId": "MOCK_MATCH_001",
+      "position": { "x": 7200, "y": 7200 },
+      "mapPosition": { "left": 48.42, "top": 51.58 },
+      "victimChampion": "LeeSin",
+      "victimTeamId": 200,
+      "killerChampion": "Vi",
+      "killerTeamId": 100,
+      "timestamp": 412000
+    },
+    {
+      "matchId": "MOCK_MATCH_002",
+      "position": { "x": 12350, "y": 3200 },
+      "mapPosition": { "left": 83.05, "top": 78.48 },
+      "victimChampion": "Jinx",
+      "victimTeamId": 100,
+      "killerChampion": "KhaZix",
+      "killerTeamId": 200,
+      "timestamp": 540000
+    },
+    {
+      "matchId": "MOCK_MATCH_002",
+      "position": { "x": 5400, "y": 12850 },
+      "mapPosition": { "left": 36.31, "top": 13.59 },
+      "victimChampion": "Thresh",
+      "victimTeamId": 200,
+      "killerChampion": "Ezreal",
+      "killerTeamId": 100,
+      "timestamp": 670000
+    },
+    {
+      "matchId": "MOCK_MATCH_003",
+      "position": { "x": 9800, "y": 9300 },
+      "mapPosition": { "left": 65.9, "top": 37.46 },
+      "victimChampion": "Ahri",
+      "victimTeamId": 100,
+      "killerChampion": "Yasuo",
+      "killerTeamId": 200,
+      "timestamp": 811000
+    }
+  ]
+}
