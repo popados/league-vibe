@@ -30,8 +30,18 @@ const MONGODB_MATCH_HISTORY_COLLECTION = process.env.MONGODB_MATCH_HISTORY_COLLE
 const MONGODB_MATCH_DETAILS_COLLECTION = process.env.MONGODB_MATCH_DETAILS_COLLECTION || 'matchDetails';
 const MONGODB_TIMELINE_COLLECTION = process.env.MONGODB_TIMELINE_COLLECTION || 'matchTimelines';
 const SUMMONERS_RIFT_MAX_COORDINATE = 14870;
+const RIOT_REQUEST_DELAY_MS = Math.max(0, Number.parseInt(process.env.RIOT_REQUEST_DELAY_MS || '120', 10) || 120);
+const RIOT_MAX_429_RETRIES = Math.max(0, Number.parseInt(process.env.RIOT_MAX_429_RETRIES || '4', 10) || 4);
+const RIOT_RETRY_BASE_DELAY_MS = Math.max(100, Number.parseInt(process.env.RIOT_RETRY_BASE_DELAY_MS || '1000', 10) || 1000);
 
 let mongoClientPromise = null;
+let riotRequestQueue = Promise.resolve();
+const riotRequestMetrics = {
+  totalRequests: 0,
+  total429Responses: 0,
+  totalRetryAttempts: 0,
+  total429Exhausted: 0
+};
 
 // Region mapping for API calls
 const REGION_MAP = {
@@ -79,6 +89,71 @@ function normalizeMatchCount(value) {
   }
 
   return Math.max(1, Math.min(parsed, 50));
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function enqueueRiotRequest(requestFn) {
+  const queuedRequest = riotRequestQueue
+    .catch(() => undefined)
+    .then(async () => {
+      if (RIOT_REQUEST_DELAY_MS > 0) {
+        await sleep(RIOT_REQUEST_DELAY_MS);
+      }
+      return requestFn();
+    });
+
+  riotRequestQueue = queuedRequest.catch(() => undefined);
+  return queuedRequest;
+}
+
+function getRiotRetryDelayMs(response, attempt) {
+  const retryAfterHeader = response.headers?.get?.('retry-after');
+  const retryAfterSeconds = Number.parseInt(retryAfterHeader || '', 10);
+
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    return retryAfterSeconds * 1000;
+  }
+
+  return RIOT_RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+}
+
+function getRiotRequestMetricsSnapshot() {
+  return { ...riotRequestMetrics };
+}
+
+async function riotApiRequestWithRetry(url, options = {}) {
+  let attempt = 0;
+
+  while (true) {
+    riotRequestMetrics.totalRequests += 1;
+
+    const response = await enqueueRiotRequest(() => fetch(url, {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        'X-Riot-Token': RIOT_API_KEY
+      }
+    }));
+
+    if (response.status !== 429) {
+      return response;
+    }
+
+    riotRequestMetrics.total429Responses += 1;
+
+    if (attempt >= RIOT_MAX_429_RETRIES) {
+      riotRequestMetrics.total429Exhausted += 1;
+      return response;
+    }
+
+    const retryDelayMs = getRiotRetryDelayMs(response, attempt);
+    riotRequestMetrics.totalRetryAttempts += 1;
+    await sleep(retryDelayMs);
+    attempt += 1;
+  }
 }
 
 async function getMongoClient() {
@@ -159,11 +234,7 @@ async function fetchRiotAccount(region, gameName, tagLine) {
   }
 
   const accountUrl = `https://${routing}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`;
-  const accountResponse = await fetch(accountUrl, {
-    headers: {
-      'X-Riot-Token': RIOT_API_KEY
-    }
-  });
+  const accountResponse = await riotApiRequestWithRetry(accountUrl);
 
   if (!accountResponse.ok) {
     if (accountResponse.status === 404) {
@@ -195,6 +266,54 @@ async function fetchRiotAccount(region, gameName, tagLine) {
   };
 }
 
+async function fetchRiotAccountByPuuid(routing, puuid) {
+  if (!RIOT_API_KEY || RIOT_API_KEY === 'YOUR_API_KEY_HERE') {
+    throw createHttpError(
+      500,
+      'Riot API key not configured',
+      'Please set the RIOT_API_KEY environment variable'
+    );
+  }
+
+  const normalizedRouting = String(routing || '').toLowerCase();
+  if (!['americas', 'asia', 'europe'].includes(normalizedRouting)) {
+    throw createHttpError(
+      400,
+      'Invalid routing region',
+      'Supported routing regions: americas, asia, europe'
+    );
+  }
+
+  if (!puuid) {
+    throw createHttpError(400, 'Missing puuid', 'A valid puuid is required');
+  }
+
+  const accountUrl = `https://${normalizedRouting}.api.riotgames.com/riot/account/v1/accounts/by-puuid/${encodeURIComponent(puuid)}`;
+  const accountResponse = await riotApiRequestWithRetry(accountUrl);
+
+  if (!accountResponse.ok) {
+    if (accountResponse.status === 404) {
+      throw createHttpError(404, 'Account not found', `No Riot account found for puuid "${puuid}"`);
+    }
+
+    if (accountResponse.status === 403) {
+      throw createHttpError(
+        403,
+        'Invalid API key',
+        'The Riot API key is invalid or expired'
+      );
+    }
+
+    throw createHttpError(
+      accountResponse.status,
+      'Failed to fetch account by puuid',
+      `Account API error: ${accountResponse.status}`
+    );
+  }
+
+  return accountResponse.json();
+}
+
 async function fetchMatchHistoryByPuuid(routing, puuid, count = 10) {
   if (!RIOT_API_KEY || RIOT_API_KEY === 'YOUR_API_KEY_HERE') {
     throw createHttpError(
@@ -220,11 +339,7 @@ async function fetchMatchHistoryByPuuid(routing, puuid, count = 10) {
   const normalizedCount = normalizeMatchCount(count);
   const matchlistUrl = `https://${normalizedRouting}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?start=0&count=${normalizedCount}`;
 
-  const matchlistResponse = await fetch(matchlistUrl, {
-    headers: {
-      'X-Riot-Token': RIOT_API_KEY
-    }
-  });
+  const matchlistResponse = await riotApiRequestWithRetry(matchlistUrl);
 
   if (!matchlistResponse.ok) {
     throw createHttpError(
@@ -239,11 +354,7 @@ async function fetchMatchHistoryByPuuid(routing, puuid, count = 10) {
     matchIds.map(async (matchId) => {
       try {
         const matchUrl = `https://${normalizedRouting}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
-        const matchResponse = await fetch(matchUrl, {
-          headers: {
-            'X-Riot-Token': RIOT_API_KEY
-          }
-        });
+        const matchResponse = await riotApiRequestWithRetry(matchUrl);
 
         if (!matchResponse.ok) {
           return null;
@@ -1547,6 +1658,9 @@ app.post('/api/match-details/sync-match-histories', async (req, res) => {
         updated: 0,
         failed: 0,
         skipped: 0,
+        savedCalls: [],
+        updatedCalls: [],
+        skippedCalls: [],
         errors: []
       });
     }
@@ -1557,13 +1671,19 @@ app.post('/api/match-details/sync-match-histories', async (req, res) => {
       updated: 0,
       skipped: 0,
       failed: 0,
+      savedCalls: [],
+      updatedCalls: [],
+      skippedCalls: [],
       errors: []
     };
 
     let processedCount = 0;
+    const metricsStart = getRiotRequestMetricsSnapshot();
 
     // Set up interval to report progress every 1 second
     const progressInterval = setInterval(() => {
+      const metricsNow = getRiotRequestMetricsSnapshot();
+
       res.write(`data: ${JSON.stringify({
         status: 'processing',
         timestamp: new Date().toISOString(),
@@ -1573,7 +1693,14 @@ app.post('/api/match-details/sync-match-histories', async (req, res) => {
           saved: summary.saved,
           updated: summary.updated,
           skipped: summary.skipped,
-          failed: summary.failed
+          failed: summary.failed,
+          savedCallsCount: summary.savedCalls.length,
+          updatedCallsCount: summary.updatedCalls.length,
+          skippedCallsCount: summary.skippedCalls.length,
+          riotRequestsSent: metricsNow.totalRequests - metricsStart.totalRequests,
+          riot429Responses: metricsNow.total429Responses - metricsStart.total429Responses,
+          riotRetryAttempts: metricsNow.totalRetryAttempts - metricsStart.totalRetryAttempts,
+          riot429Exhausted: metricsNow.total429Exhausted - metricsStart.total429Exhausted
         }
       })}\n\n`);
     }, 1000);
@@ -1586,8 +1713,6 @@ app.post('/api/match-details/sync-match-histories', async (req, res) => {
     for (const row of puuidRows) {
       const puuid = row?._id?.puuid;
       const routingRegion = String(row?._id?.region || 'americas').toLowerCase();
-      const gameName = row?.gameName || 'Unknown';
-      const tagLine = row?.tagLine || 'Unknown';
 
       if (!['americas', 'asia', 'europe'].includes(routingRegion)) {
         summary.failed += 1;
@@ -1597,10 +1722,18 @@ app.post('/api/match-details/sync-match-histories', async (req, res) => {
       }
 
       try {
+        const accountData = await fetchRiotAccountByPuuid(routingRegion, puuid);
+        const gameName = accountData?.gameName || row?.gameName || 'Unknown';
+        const tagLine = accountData?.tagLine || row?.tagLine || 'Unknown';
         const matches = await fetchMatchHistoryByPuuid(routingRegion, puuid, normalizedCount);
 
         if (!Array.isArray(matches) || matches.length === 0) {
           summary.skipped += 1;
+          summary.skippedCalls.push({
+            puuid,
+            region: routingRegion,
+            reason: 'No matches returned'
+          });
           processedCount += 1;
           continue;
         }
@@ -1654,8 +1787,20 @@ app.post('/api/match-details/sync-match-histories', async (req, res) => {
 
         if (existingDocument) {
           summary.updated += 1;
+          summary.updatedCalls.push({
+            puuid,
+            region: matchHistory.summoner.region,
+            riotId: matchHistory.summoner.riotId,
+            matchCount: documentToSave.matchCount
+          });
         } else {
           summary.saved += 1;
+          summary.savedCalls.push({
+            puuid,
+            region: matchHistory.summoner.region,
+            riotId: matchHistory.summoner.riotId,
+            matchCount: documentToSave.matchCount
+          });
         }
       } catch (error) {
         summary.failed += 1;
@@ -1672,12 +1817,20 @@ app.post('/api/match-details/sync-match-histories', async (req, res) => {
     // Clear the progress interval
     clearInterval(progressInterval);
 
+    const metricsEnd = getRiotRequestMetricsSnapshot();
+
     // Send final completion message
     res.write(`data: ${JSON.stringify({
       status: 'completed',
       message: 'PUUID sync from matchDetails to matchHistories completed',
       requestedCount: normalizedCount,
       timestamp: new Date().toISOString(),
+      retryMetrics: {
+        riotRequestsSent: metricsEnd.totalRequests - metricsStart.totalRequests,
+        riot429Responses: metricsEnd.total429Responses - metricsStart.total429Responses,
+        riotRetryAttempts: metricsEnd.totalRetryAttempts - metricsStart.totalRetryAttempts,
+        riot429Exhausted: metricsEnd.total429Exhausted - metricsStart.total429Exhausted
+      },
       ...summary
     })}\n\n`);
     res.end();
@@ -1685,6 +1838,266 @@ app.post('/api/match-details/sync-match-histories', async (req, res) => {
     console.error('Error syncing match histories from match details:', error);
     res.status(error.status || 500).json({
       error: error.error || 'Failed to sync match histories from match details',
+      details: error.details || error.message
+    });
+  }
+});
+
+// Batch timeline sync: scan matchHistories and save timelines into matchTimelines schema
+app.post('/api/match-histories/sync-timelines', async (req, res) => {
+  let progressInterval = null;
+
+  try {
+    const maxMatchIdsRaw = req.body.maxMatchIds ?? req.query.maxMatchIds ?? null;
+    const maxMatchIds = maxMatchIdsRaw === null ? null : Math.max(1, Number.parseInt(maxMatchIdsRaw, 10) || 1);
+    const forceUpdate = req.body.forceUpdate === true || String(req.query.forceUpdate || '').toLowerCase() === 'true';
+    const delayMsRaw = req.body.delayMs ?? req.query.delayMs ?? process.env.SYNC_TIMELINES_DELAY_MS ?? 300;
+    const delayMs = Math.max(0, Number.parseInt(delayMsRaw, 10) || 0);
+    const progressIntervalMsRaw = req.body.progressIntervalMs ?? req.query.progressIntervalMs ?? process.env.SYNC_TIMELINES_PROGRESS_INTERVAL_MS ?? 1000;
+    const progressIntervalMs = Math.max(250, Number.parseInt(progressIntervalMsRaw, 10) || 1000);
+
+    const sendEvent = (payload) => {
+      if (res.writableEnded) {
+        return;
+      }
+
+      res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    };
+
+    const historyCollection = await getMatchHistoryCollection();
+    const timelineCollection = await getTimelineCollection();
+
+    const aggregation = [
+      {
+        $project: {
+          region: { $ifNull: ['$region', '$matchHistory.summoner.region'] },
+          gameName: { $ifNull: ['$gameName', '$matchHistory.summoner.gameName'] },
+          tagLine: { $ifNull: ['$tagLine', '$matchHistory.summoner.tagLine'] },
+          riotId: { $ifNull: ['$riotId', '$matchHistory.summoner.riotId'] },
+          matches: { $ifNull: ['$matchHistory.matches', []] }
+        }
+      },
+      { $unwind: '$matches' },
+      {
+        $match: {
+          'matches.matchId': { $type: 'string', $ne: '' }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            matchId: '$matches.matchId',
+            region: '$region'
+          },
+          gameName: { $first: '$gameName' },
+          tagLine: { $first: '$tagLine' },
+          riotId: { $first: '$riotId' }
+        }
+      }
+    ];
+
+    if (maxMatchIds !== null) {
+      aggregation.push({ $limit: maxMatchIds });
+    }
+
+    const matchRows = await historyCollection.aggregate(aggregation).toArray();
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    let processedCount = 0;
+
+    if (matchRows.length === 0) {
+      sendEvent({
+        status: 'completed',
+        message: 'No match IDs found in matchHistories collection',
+        timestamp: new Date().toISOString(),
+        forceUpdate,
+        scannedMatchIds: 0,
+        delayMs,
+        throttledRequests: 0,
+        totalThrottleDelayMs: 0,
+        saved: 0,
+        updated: 0,
+        skipped: 0,
+        failed: 0,
+        savedTimelines: [],
+        updatedTimelines: [],
+        skippedTimelines: [],
+        failedTimelines: []
+      });
+      return res.end();
+    }
+
+    const summary = {
+      scannedMatchIds: matchRows.length,
+      delayMs,
+      throttledRequests: 0,
+      totalThrottleDelayMs: 0,
+      saved: 0,
+      updated: 0,
+      skipped: 0,
+      failed: 0,
+      savedTimelines: [],
+      updatedTimelines: [],
+      skippedTimelines: [],
+      failedTimelines: []
+    };
+
+    progressInterval = setInterval(() => {
+      sendEvent({
+        status: 'processing',
+        timestamp: new Date().toISOString(),
+        processingProgress: {
+          documentsMatchIdsProcessed: processedCount,
+          totalMatchIdsToProcess: matchRows.length,
+          saved: summary.saved,
+          updated: summary.updated,
+          skipped: summary.skipped,
+          failed: summary.failed,
+          savedTimelinesCount: summary.savedTimelines.length,
+          updatedTimelinesCount: summary.updatedTimelines.length,
+          skippedTimelinesCount: summary.skippedTimelines.length,
+          failedTimelinesCount: summary.failedTimelines.length,
+          throttledRequests: summary.throttledRequests,
+          totalThrottleDelayMs: summary.totalThrottleDelayMs
+        }
+      });
+    }, progressIntervalMs);
+
+    for (const row of matchRows) {
+      const matchId = row?._id?.matchId;
+      const rawRegion = String(row?._id?.region || 'americas');
+      const region = rawRegion.toLowerCase();
+      const gameName = row?.gameName || 'Unknown';
+      const tagLine = row?.tagLine || 'Unknown';
+      const riotId = row?.riotId || `${gameName}#${tagLine}`;
+
+      if (!matchId) {
+        summary.failed += 1;
+        summary.failedTimelines.push({
+          matchId: null,
+          region,
+          error: 'Missing matchId'
+        });
+        processedCount += 1;
+        continue;
+      }
+
+      if (!['americas', 'asia', 'europe'].includes(region)) {
+        summary.failed += 1;
+        summary.failedTimelines.push({
+          matchId,
+          region,
+          error: 'Unsupported routing region'
+        });
+        processedCount += 1;
+        continue;
+      }
+
+      const filter = { matchId, region };
+
+      try {
+        const existingDocument = await timelineCollection.findOne(filter, { projection: { _id: 1 } });
+
+        if (existingDocument && !forceUpdate) {
+          summary.skipped += 1;
+          summary.skippedTimelines.push({
+            matchId,
+            region,
+            reason: 'Timeline already exists'
+          });
+          processedCount += 1;
+          continue;
+        }
+
+        if (delayMs > 0) {
+          await sleep(delayMs);
+          summary.throttledRequests += 1;
+          summary.totalThrottleDelayMs += delayMs;
+        }
+
+        const now = new Date();
+        const timelineData = await fetchInitialFramePlayerPositions(matchId, region);
+
+        // Keep the same schema used by the /timeline/save endpoint
+        const documentToSave = {
+          matchId,
+          region,
+          gameName,
+          tagLine,
+          riotId,
+          frames: timelineData.frames,
+          firstFrameTimestamp: timelineData.firstFrameTimestamp ?? null,
+          updatedAt: now
+        };
+
+        await timelineCollection.updateOne(
+          filter,
+          {
+            $set: documentToSave,
+            $setOnInsert: { createdAt: now }
+          },
+          { upsert: true }
+        );
+
+        if (existingDocument) {
+          summary.updated += 1;
+          summary.updatedTimelines.push({ matchId, region, riotId });
+        } else {
+          summary.saved += 1;
+          summary.savedTimelines.push({ matchId, region, riotId });
+        }
+      } catch (error) {
+        summary.failed += 1;
+        summary.failedTimelines.push({
+          matchId,
+          region,
+          error: error.details || error.message || 'Failed to sync timeline'
+        });
+      }
+
+      processedCount += 1;
+    }
+
+    if (progressInterval) {
+      clearInterval(progressInterval);
+      progressInterval = null;
+    }
+
+    sendEvent({
+      status: 'completed',
+      message: 'Timeline sync from matchHistories to matchTimelines completed',
+      timestamp: new Date().toISOString(),
+      forceUpdate,
+      ...summary
+    });
+    res.end();
+  } catch (error) {
+    if (progressInterval) {
+      clearInterval(progressInterval);
+      progressInterval = null;
+    }
+
+    console.error('Error syncing timelines from match histories:', error);
+
+    if (res.headersSent) {
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({
+          status: 'error',
+          timestamp: new Date().toISOString(),
+          error: error.error || 'Failed to sync timelines from match histories',
+          details: error.details || error.message
+        })}\n\n`);
+        res.end();
+      }
+
+      return;
+    }
+
+    res.status(error.status || 500).json({
+      error: error.error || 'Failed to sync timelines from match histories',
       details: error.details || error.message
     });
   }
@@ -1763,12 +2176,12 @@ app.listen(PORT, () => {
   console.log(`📊 Match History API available at http://localhost:${PORT}/api/summoner/:region/:gameName/:tagLine/matches`);
   console.log(`💾 Match History Save API available at http://localhost:${PORT}/api/summoner/:region/:gameName/:tagLine/matches/save`);
   console.log(`🗂️ Match Details Batch Save API available at http://localhost:${PORT}/api/summoner/:region/:gameName/:tagLine/matches/save-details`);
-  console.log(`🔁 Match History Sync API available at http://localhost:${PORT}/api/match-details/sync-match-histories`);
   console.log(`🎯 Match Details API available at http://localhost:${PORT}/api/summoner/:region/:gameName/:tagLine/matches/:matchId`);
   console.log(`🧾 Match Details Save API available at http://localhost:${PORT}/api/summoner/:gameName/:tagLine/matches/:matchId/save`);
   console.log(`🧹 Match History Cleanup API available at http://localhost:${PORT}/api/match-histories/cleanup-unknown-gamename`);
   console.log(`📈 Heatmap Kill Events API available at http://localhost:${PORT}/api/heatmap/kill-events`);
-  console.log(`🔐 Match Details Sync API available at http://localhost:${PORT}/api/match-details/sync-match-histories`);
+  console.log(`🔁 Match History Sync API available at http://localhost:${PORT}/api/match-details/sync-match-histories`);
+  console.log(`🗺️ Timeline Sync API available at http://localhost:${PORT}/api/match-histories/sync-timelines`);
   console.log('⚠️  use curl or Postman to test POST endpoints with JSON bodies');
 
   if (!RIOT_API_KEY || RIOT_API_KEY === 'YOUR_API_KEY_HERE') {

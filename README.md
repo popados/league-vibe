@@ -25,16 +25,25 @@ This site searches for a player and displays their most recent matches. When cli
 
 Use the debug object from the champion-stats API response as a health check for your data pipeline.
 
-Call the endpoint
+Call the endpoints
 
 ```bash
-GET /api/summoner/:region/:gameName/:tagLine/champion-stats
+curl -X DELETE "http://localhost:3001/api/match-histories/cleanup-unknown-gamename"
+```
+
+```bash
+curl --no-buffer -X POST "http://localhost:3001/api/match-details/sync-match-histories" -H "Content-Type: application/json"
+```
+
+```bash
+curl -X GET /api/summoner/:region/:gameName/:tagLine/champion-stats
 Example:
 ```
 
 ```bash
-curl "http://localhost:3001/api/summoner/na1/YourGameName/YourTag/champion-stats"
+curl -X GET "http://localhost:3001/api/summoner/na1/YourGameName/YourTag/champion-stats"
 ```
+
 Look at these top-level debug fields first
 - `debug.matchedDocuments`: total match docs found in matchDetails for this puuid
 - `debug.matchedParticipants`: docs where summoner participant was actually found
@@ -42,6 +51,7 @@ Look at these top-level debug fields first
 Quick rule:
 
 If matchedDocuments > 0 and matchedParticipants = 0, your participant path/data shape is wrong for those docs.
+
 Validate champion ID coverage
 - debug.matchesWithChampionId
 - debug.matchesMissingChampionId
@@ -51,6 +61,7 @@ Validate champion ID coverage
 Quick rule:
 
 If matchesMissingChampionId > 0, inspect those match IDs first.
+
 Drill into per-match records
 
 Each item in debug.matches has:
@@ -64,23 +75,28 @@ Each item in debug.matches has:
 Use this to answer:
 
 “Did this match include the summoner?” → hasParticipant
-“Was champion resolved?” → hasChampionId
-“Which champ was linked?” → championId, championName
 
-Cross-check champion stats consistency
+“Was champion resolved?” → hasChampionId
+
+“Which champ was linked?” → championId, championName
 
 Sum of all games across championStats should match debug.matchedParticipants.
 
 If not, some extracted participant rows are malformed or filtered out.
+
 Fast troubleshooting patterns
 
 missingParticipants > 0 and missingParticipantMatchIds populated:
+
 those docs likely use a different participant layout or corrupted payload
 
+
 hasParticipant = true but hasChampionId = false:
+
 participant exists but missing championId in saved match detail
 
 matchIdsMissingChampionId empty but UI still says no picks:
+
 frontend rendering/filtering issue, not backend extraction
 
 ## 🚀 Quick Start
@@ -189,12 +205,23 @@ league-vibe/
 
 - `GET /api/health` - Server health check
 - `GET /api/champions` - Get all champions data
+- `GET /api/champions/selection-rate` - Get global champion selection and win rates from saved match details
+- `GET /api/champions/:championId` - Get detailed data for a single champion
 - `GET /api/items` - Get all items data
-- `GET /api/summoner/:region/:gameName/:tag` - Get summoner info
-- `GET /api/summoner/:region/:gameName/:tag/matches` - Get match history
-- `POST /api/summoner/:region/:gameName/:tag/matches/save` - Save hosted match history JSON to MongoDB
-- `GET /api/summoner/:gameName/:tag/matches/:matchId` - Get match details
-- `POST /api/summoner/:gameName/:tag/matches/:matchId/save` - Save match details JSON to MongoDB
+- `GET /api/summoner/:region/:gameName/:tagLine` - Get summoner info by Riot ID
+- `GET /api/summoner/:region/:summonerName` - Legacy/deprecated endpoint (returns 410)
+- `GET /api/summoner/:region/:gameName/:tagLine/matches` - Get match history by Riot ID
+- `GET /api/summoner/:region/:gameName/:tagLine/champion-stats` - Get cached champion stats for a summoner
+- `POST /api/summoner/:region/:gameName/:tagLine/matches/save` - Save hosted match history JSON to MongoDB
+- `POST /api/summoner/:region/:gameName/:tagLine/matches/save-details` - Save all match details from match history to MongoDB
+- `GET /api/summoner/:gameName/:tagLine/matches/:matchId` - Get match details by match ID
+- `GET /api/summoner/:gameName/:tagLine/matches/:matchId/timeline` - Get timeline summary for a match
+- `POST /api/summoner/:gameName/:tagLine/matches/:matchId/timeline/save` - Save match timeline to MongoDB
+- `POST /api/summoner/:gameName/:tagLine/matches/:matchId/save` - Save match details JSON to MongoDB
+- `POST /api/match-details/sync-match-histories` - SSE batch sync from match details to match histories
+- `POST /api/match-histories/sync-timelines` - SSE batch sync from match histories to timelines
+- `DELETE /api/match-histories/cleanup-unknown-gamename` - Remove match history docs with unknown gameName
+- `GET /api/heatmap/kill-events` - Get aggregated CHAMPION_KILL events for heatmap rendering
 
 ### MongoDB Save Route
 

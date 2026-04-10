@@ -1,6 +1,16 @@
 const MAP_IMAGE_URL = "https://ddragon.leagueoflegends.com/cdn/6.8.1/img/map/map11.png";
 const HEATMAP_CELL_SIZE = 25;
 
+function formatSubtitle({ visibleCount, total, matchCount, selectedVictim }) {
+	const matchLabel = `${matchCount} saved match${matchCount !== 1 ? "es" : ""}`;
+
+	if (selectedVictim === "all") {
+		return `${visibleCount} kill event${visibleCount !== 1 ? "s" : ""} across ${matchLabel}`;
+	}
+
+	return `${visibleCount} kill event${visibleCount !== 1 ? "s" : ""} where ${selectedVictim} was the victim out of ${total} total event${total !== 1 ? "s" : ""} across ${matchLabel}`;
+}
+
 function createHeatmapCell({ x, y, count, maxCount }) {
 	const cell = document.createElement("div");
 	const ratio = maxCount > 0 ? count / maxCount : 0;
@@ -29,6 +39,15 @@ function createHeatmapCell({ x, y, count, maxCount }) {
 export function createHeatMapView({ events = [], total = 0, matchCount = 0 } = {}) {
 	const heatmapView = document.createElement("div");
 	heatmapView.className = "map-view heatmap-view";
+	let selectedVictim = "all";
+
+	const victimChampions = Array.from(
+		new Set(
+			events
+				.map((event) => event?.victimChampion)
+				.filter((victimChampion) => typeof victimChampion === "string" && victimChampion.trim() !== "")
+		)
+	).sort((left, right) => left.localeCompare(right));
 
 	const title = document.createElement("h2");
 	title.textContent = "Heatmap - Summoner's Rift";
@@ -36,8 +55,35 @@ export function createHeatMapView({ events = [], total = 0, matchCount = 0 } = {
 
 	const subtitle = document.createElement("p");
 	subtitle.className = "map-view-subtitle";
-	subtitle.textContent = `${total} kill event${total !== 1 ? "s" : ""} across ${matchCount} saved match${matchCount !== 1 ? "es" : ""}`;
 	heatmapView.appendChild(subtitle);
+
+	const controls = document.createElement("div");
+	controls.className = "heatmap-controls";
+
+	const victimLabel = document.createElement("label");
+	victimLabel.className = "heatmap-filter-label";
+	victimLabel.textContent = "Victim champion";
+	victimLabel.setAttribute("for", "heatmap-victim-filter");
+	controls.appendChild(victimLabel);
+
+	const victimSelect = document.createElement("select");
+	victimSelect.id = "heatmap-victim-filter";
+	victimSelect.className = "filter-select heatmap-filter-select";
+
+	const allOption = document.createElement("option");
+	allOption.value = "all";
+	allOption.textContent = "All champions";
+	victimSelect.appendChild(allOption);
+
+	victimChampions.forEach((victimChampion) => {
+		const option = document.createElement("option");
+		option.value = victimChampion;
+		option.textContent = victimChampion;
+		victimSelect.appendChild(option);
+	});
+
+	controls.appendChild(victimSelect);
+	heatmapView.appendChild(controls);
 
 	const imgContainer = document.createElement("div");
 	imgContainer.className = "map-image-container heatmap-image-container";
@@ -52,6 +98,24 @@ export function createHeatMapView({ events = [], total = 0, matchCount = 0 } = {
 	overlay.className = "map-overlay heatmap-overlay";
 	imgContainer.appendChild(overlay);
 
+	function getFilteredEvents() {
+		if (selectedVictim === "all") {
+			return events;
+		}
+
+		return events.filter((event) => event?.victimChampion === selectedVictim);
+	}
+
+	function updateSubtitle() {
+		const filteredEvents = getFilteredEvents();
+		subtitle.textContent = formatSubtitle({
+			visibleCount: filteredEvents.length,
+			total,
+			matchCount,
+			selectedVictim
+		});
+	}
+
 	function renderHeatmapGrid() {
 		const width = imgContainer.clientWidth;
 		const height = imgContainer.clientHeight;
@@ -61,8 +125,9 @@ export function createHeatMapView({ events = [], total = 0, matchCount = 0 } = {
 		}
 
 		const heatTiles = new Map();
+		const filteredEvents = getFilteredEvents();
 
-		events.forEach((event) => {
+		filteredEvents.forEach((event) => {
 			const left = event?.mapPosition?.left;
 			const top = event?.mapPosition?.top;
 
@@ -100,6 +165,12 @@ export function createHeatMapView({ events = [], total = 0, matchCount = 0 } = {
 
 	heatmapView.appendChild(imgContainer);
 
+	victimSelect.addEventListener("change", (event) => {
+		selectedVictim = event.target.value;
+		updateSubtitle();
+		renderHeatmapGrid();
+	});
+
 	mapImage.addEventListener("load", () => {
 		renderHeatmapGrid();
 	});
@@ -115,8 +186,11 @@ export function createHeatMapView({ events = [], total = 0, matchCount = 0 } = {
 
 	if (!mapImage.complete) {
 		subtitle.textContent = "Loading map image...";
+	} else {
+		updateSubtitle();
 	}
 
+	updateSubtitle();
 	renderHeatmapGrid();
 	return heatmapView;
 }
