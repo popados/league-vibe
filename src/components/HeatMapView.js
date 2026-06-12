@@ -1,5 +1,6 @@
 const MAP_IMAGE_URL = "https://ddragon.leagueoflegends.com/cdn/6.8.1/img/map/map11.png";
-const HEATMAP_CELL_SIZE = 25;
+// Cell size is computed dynamically; this is the baseline at full width (900 px → 25 px).
+const HEATMAP_GRID_COLUMNS = 36;
 
 function formatSubtitle({ visibleCount, total, matchCount, selectedVictim }) {
 	const matchLabel = `${matchCount} saved match${matchCount !== 1 ? "es" : ""}`;
@@ -11,7 +12,7 @@ function formatSubtitle({ visibleCount, total, matchCount, selectedVictim }) {
 	return `${visibleCount} kill event${visibleCount !== 1 ? "s" : ""} where ${selectedVictim} was the victim out of ${total} total event${total !== 1 ? "s" : ""} across ${matchLabel}`;
 }
 
-function createHeatmapCell({ x, y, count, maxCount }) {
+function createHeatmapCell({ x, y, count, maxCount, cellSize }) {
 	const cell = document.createElement("div");
 	const ratio = maxCount > 0 ? count / maxCount : 0;
 	const hue = Math.round(44 - (44 * ratio));
@@ -19,8 +20,8 @@ function createHeatmapCell({ x, y, count, maxCount }) {
 	cell.className = "heatmap-cell";
 	cell.style.left = `${x}px`;
 	cell.style.top = `${y}px`;
-	cell.style.width = `${HEATMAP_CELL_SIZE}px`;
-	cell.style.height = `${HEATMAP_CELL_SIZE}px`;
+	cell.style.width = `${cellSize}px`;
+	cell.style.height = `${cellSize}px`;
 	cell.style.background = count > 0
 		? `hsla(${hue}, 95%, 52%, 0.7)`
 		: "hsla(0, 0%, 12%, 0.12)";
@@ -124,6 +125,9 @@ export function createHeatMapView({ events = [], total = 0, matchCount = 0 } = {
 			return;
 		}
 
+		// Scale cell size proportionally to container width; minimum 8 px on very small screens.
+		const cellSize = Math.max(8, Math.round(width / HEATMAP_GRID_COLUMNS));
+
 		const heatTiles = new Map();
 		const filteredEvents = getFilteredEvents();
 
@@ -137,8 +141,8 @@ export function createHeatMapView({ events = [], total = 0, matchCount = 0 } = {
 
 			const x = Math.min(width - 1, Math.max(0, (left / 100) * width));
 			const y = Math.min(height - 1, Math.max(0, (top / 100) * height));
-			const tileX = Math.floor(x / HEATMAP_CELL_SIZE) * HEATMAP_CELL_SIZE;
-			const tileY = Math.floor(y / HEATMAP_CELL_SIZE) * HEATMAP_CELL_SIZE;
+			const tileX = Math.floor(x / cellSize) * cellSize;
+			const tileY = Math.floor(y / cellSize) * cellSize;
 			const key = `${tileX}:${tileY}`;
 			const current = heatTiles.get(key) ?? 0;
 
@@ -148,17 +152,17 @@ export function createHeatMapView({ events = [], total = 0, matchCount = 0 } = {
 		overlay.innerHTML = "";
 
 		const maxCount = Math.max(...heatTiles.values(), 0);
-		const columns = Math.ceil(width / HEATMAP_CELL_SIZE);
-		const rows = Math.ceil(height / HEATMAP_CELL_SIZE);
+		const columns = Math.ceil(width / cellSize);
+		const rows = Math.ceil(height / cellSize);
 
 		for (let row = 0; row < rows; row += 1) {
 			for (let column = 0; column < columns; column += 1) {
-				const x = column * HEATMAP_CELL_SIZE;
-				const y = row * HEATMAP_CELL_SIZE;
+				const x = column * cellSize;
+				const y = row * cellSize;
 				const key = `${x}:${y}`;
 				const count = heatTiles.get(key) ?? 0;
 
-				overlay.appendChild(createHeatmapCell({ x, y, count, maxCount }));
+				overlay.appendChild(createHeatmapCell({ x, y, count, maxCount, cellSize }));
 			}
 		}
 	}

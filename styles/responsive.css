@@ -1,1 +1,61 @@
+/* ── Navigation responsive behaviour ── */
+
+/* Hamburger button: hidden on desktop */
+.nav-hamburger {
+  display: none;
+}
+
+/* Above 770 px — horizontal rows with spacing between them */
+.app-navigation-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+/* Below 770 px — vertical stacked navigation */
+@media (max-width: 770px) {
+  /* Show the hamburger toggle */
+  .nav-hamburger {
+    display: block;
+    width: 100%;
+    padding: 10px 16px;
+    background: var(--nav-bg-color);
+    border: 1px solid var(--link-color);
+    color: var(--main-color);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    text-align: left;
+  }
+
+  .nav-hamburger:hover {
+    background: var(--secondary-color);
+    color: var(--last-color);
+  }
+
+  /* Hide rows by default on mobile; show when nav-open is toggled */
+  .app-navigation-rows {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    margin-top: 6px;
+  }
+
+  .app-navigation.nav-open .app-navigation-rows {
+    display: flex;
+  }
+
+  /* Stack each row's buttons vertically */
+  .app-navigation-row {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  /* Heatmap: shrink cell labels on small cells */
+  .heatmap-cell-label {
+    font-size: 0.45em;
+  }
+}
 
